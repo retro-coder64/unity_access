@@ -18,9 +18,9 @@ namespace UnityAccess
         private int selectedIndex = -1;
 
         /// <summary>
-        /// Opens the accessible hierarchy. The underscore makes I a Unity menu shortcut.
+        /// Opens the accessible hierarchy. The underscore makes H a Unity menu shortcut.
         /// </summary>
-        [MenuItem("Unity Access/Hierarchy _i", false, 1)]
+        [MenuItem("Unity Access/Hierarchy _h", false, 1)]
         public static void Open()
         {
             try
@@ -64,7 +64,7 @@ namespace UnityAccess
             {
                 HandleKeyboardInput(Event.current);
                 EditorGUILayout.LabelField("Scene objects", EditorStyles.boldLabel);
-                EditorGUILayout.LabelField("Use Up and Down to navigate. Press Enter to open the inspector.");
+                EditorGUILayout.LabelField("Use Up and Down to navigate. Press Enter to select an object for the inspector.");
 
                 scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
                 for (int index = 0; index < sceneObjects.Count; index++)
@@ -131,7 +131,7 @@ namespace UnityAccess
 
             selectedIndex = Mathf.Clamp(selectedIndex + direction, 0, sceneObjects.Count - 1);
             GameObject selectedObject = sceneObjects[selectedIndex];
-            Selection.activeGameObject = selectedObject;
+            // Navigation changes only the hierarchy cursor; Enter commits shared selection.
             EditorGUIUtility.PingObject(selectedObject);
             SpeakSafely(GetSpokenName(selectedObject) + ", " + (selectedIndex + 1) + " of " + sceneObjects.Count + ".");
             Repaint();
@@ -145,9 +145,11 @@ namespace UnityAccess
                 return;
             }
 
-            Selection.activeGameObject = sceneObjects[selectedIndex];
-            SpeakSafely("Inspector opened for " + GetSpokenName(sceneObjects[selectedIndex]) + ".");
-            EditorUtility.DisplayDialog("Unity Access", "inspector opened", "OK");
+            // Publish shared state so the hierarchy never calls the inspector directly.
+            GameObject selectedObject = sceneObjects[selectedIndex];
+            Selection.activeGameObject = selectedObject;
+            SpeakSafely(GetSpokenName(selectedObject) + " selected for the inspector.");
+            SharedSelection.Select(selectedObject);
         }
 
         private void HandleHierarchyChanged()
@@ -249,6 +251,18 @@ namespace UnityAccess
             {
                 PluginErrorLog.Write(nameof(HierarchyAccessibilityWindow), exception);
             }
+        }
+    }
+
+    /// <summary>
+    /// Restores the accessible hierarchy when another window publishes a return request.
+    /// </summary>
+    [InitializeOnLoad]
+    internal static class HierarchyReturnObserver
+    {
+        static HierarchyReturnObserver()
+        {
+            SharedSelection.ReturnToHierarchyRequested += HierarchyAccessibilityWindow.Open;
         }
     }
 }

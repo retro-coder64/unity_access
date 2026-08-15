@@ -52,3 +52,63 @@ hierarchy/HierarchyAccessibilityWindow.cs
 Added NVDA availability validation and a visible startup error when speech communication fails.
 line 24
 line 49
+
+hierarchy/HierarchyAccessibilityWindow.cs
+Aligned the hierarchy with its Markdown specification: H opens the view, arrow navigation remains local, and Enter alone publishes the object through shared Unity Selection without a placeholder dialog.
+line 20
+line 152
+
+tests.txt
+Updated the hierarchy manual validation record for the H shortcut and observer-based selection behavior.
+line 1
+line 1
+
+SharedSelection.cs
+Added the observer-based shared object selection state used to decouple the hierarchy and inspector.
+line 1
+line 44
+
+hierarchy/HierarchyAccessibilityWindow.cs
+Published committed hierarchy selections to SharedSelection after the NVDA selection announcement.
+line 148
+line 153
+
+inspector/InspectorAccessibilityWindow.cs
+Added the NVDA-accessible inspector with observer-driven startup, keyboard navigation, editable position and rotation axes, Undo support, component listing, and Escape handling.
+line 1
+line 342
+
+tests.txt
+Recorded the accessible inspector manual validation requirements.
+line 1
+line 1
+
+SharedSelection.cs
+Added an observer event for accessible windows to request a return to the hierarchy without direct window coupling.
+line 18
+line 59
+
+inspector/InspectorAccessibilityWindow.cs
+Changed Escape handling to close the inspector and publish a hierarchy-return request, and updated the visible keyboard guidance.
+line 84
+line 154
+
+hierarchy/HierarchyAccessibilityWindow.cs
+Added an observer that opens, focuses, and announces the hierarchy when a shared return request is published.
+line 257
+line 267
+
+tests.txt
+Updated inspector validation to require Escape to restore hierarchy focus and NVDA context.
+line 1
+line 1
+
+inspector/InspectorAccessibilityWindow.cs
+Deferred the Escape return request until the next Unity Editor update so hierarchy focus occurs after the inspector OnGUI cycle and window closure finish.
+line 149
+line 156
+
+tests.txt
+Updated the Escape validation record to cover the deferred hierarchy transition.
+line 1
+line 1
