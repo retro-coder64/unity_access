@@ -1,0 +1,1 @@
+NVDA controller live test: nvdaController_testIfRunning and nvdaController_speakText both returned 0 with NVDA 2025.3.3 running. Validate the hierarchy view in Unity: Start and I open it, Up and Down speak scene objects, and Enter selects an object and shows the inspector-opened dialog.

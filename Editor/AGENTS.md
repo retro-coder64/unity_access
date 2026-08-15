@@ -1,0 +1,49 @@
+#AGENTS.md 
+an accessibility plugin for the unity editor version 6.3, written in c#.
+##project structure 
+unity_access/ (root directory of the project do not edit)
+unity_access/Assets/Editor/
+unity_access/Assets/Editor/unity_access.cs (will be the main file of the plugin)
+unity_access/Assets/Editor/tests/
+unity_access/Assets/Editor/inspector/
+unity_access/AssetsEditor/hierarchy/
+do not edit files, unless told to do so by the user, in the root directory. 
+only use the working directory 
+## project language
+the project is written in c#
+it will use the unity namespaces such as UnityEditor 
+all code must be validated and strict typing is to be inforced. 
+
+## testing 
+all test files will be placed in unity_access/Editor/test 
+the file name and the test will be noted in unity_access/Editor/tests.txt 
+the test files are not to be used in the main script 
+## error handling 
+all code will pass errors into unity_access/Editor/debug.txt 
+it should follow the structure of:
+filename 
+error 
+## changes 
+all changes will be recorded in unity_access/Editor/changes.txt 
+they should follow the format: 
+filename 
+change description
+line number of the start of the change 
+line number of the end of change 
+## accessibility 
+the code will use the NVDA API to send text from the editor 
+no feature is completed until the user can navigate it with NVDA 
+create a file in this directory that will be responsible for handling the NVDA api. 
+it should be callable by all files and it should be able to take data and pass it accurately. 
+
+##best practices 
+prefer small direct changes
+all changes will be noted in the changes.txt with the correct format 
+all code must be clearly commented 
+
+
+## useful commands 
+use UnityEditor
+
+## startup 
+give the unity access plugin a button to start it in the menu bar 

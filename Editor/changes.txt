@@ -1,0 +1,54 @@
+unity_access.cs
+Added the Unity Access plugin entry point and Unity Editor menu-bar Start command.
+line 1
+line 33
+
+NvdaApi.cs
+Added the shared NVDA speech API wrapper and project error logger.
+line 1
+line 74
+
+debug.txt
+Created the plugin error log.
+line 1
+line 1
+
+tests.txt
+Created the test registry and recorded that initial setup has no automated tests.
+line 1
+line 1
+
+hierarchy/HierarchyAccessibilityWindow.cs
+Added the NVDA-accessible, keyboard-driven hierarchy browser for loaded scene objects.
+line 1
+line 245
+
+unity_access.cs
+Changed the Start menu command to open the accessible hierarchy.
+line 17
+line 30
+
+tests.txt
+Recorded the hierarchy view manual validation requirement.
+line 1
+line 1
+
+NvdaApi.cs
+Updated the wrapper for the current NVDA controller API, added connection checking and speech interruption, and corrected the debug log path.
+line 1
+line 100
+
+nvdaControllerClient.dll
+Added the official NVDA 2025.3.3 64-bit controller client required by the Unity Editor process.
+line 1
+line 1
+
+nvdaControllerClient.LICENSE.txt
+Added the official LGPL license distributed with the NVDA controller client.
+line 1
+line 504
+
+hierarchy/HierarchyAccessibilityWindow.cs
+Added NVDA availability validation and a visible startup error when speech communication fails.
+line 24
+line 49
