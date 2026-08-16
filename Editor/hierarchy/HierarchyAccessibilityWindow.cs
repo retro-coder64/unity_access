@@ -64,7 +64,7 @@ namespace UnityAccess
             {
                 HandleKeyboardInput(Event.current);
                 EditorGUILayout.LabelField("Scene objects", EditorStyles.boldLabel);
-                EditorGUILayout.LabelField("Use Up and Down to navigate. Press Enter to select an object for the inspector.");
+                EditorGUILayout.LabelField("Use Up and Down to navigate. Enter selects; Backspace removes an object.");
 
                 scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
                 for (int index = 0; index < sceneObjects.Count; index++)
@@ -89,7 +89,9 @@ namespace UnityAccess
                 EditorGUI.DrawRect(row, new Color(0.24f, 0.49f, 0.90f, 0.45f));
             }
 
-            EditorGUI.LabelField(row, GetDisplayName(sceneObject), EditorStyles.label);
+            // Unity objects compare equal to null immediately after external destruction.
+            string displayName = sceneObject == null ? "Object removed" : GetDisplayName(sceneObject);
+            EditorGUI.LabelField(row, displayName, EditorStyles.label);
         }
 
         private void HandleKeyboardInput(Event currentEvent)
@@ -114,6 +116,11 @@ namespace UnityAccess
                 OpenSelectedObject();
                 currentEvent.Use();
             }
+            else if (currentEvent.keyCode == KeyCode.Backspace)
+            {
+                RemoveSelectedObject();
+                currentEvent.Use();
+            }
             else if (currentEvent.keyCode == KeyCode.F5)
             {
                 RefreshHierarchy(true);
@@ -131,6 +138,13 @@ namespace UnityAccess
 
             selectedIndex = Mathf.Clamp(selectedIndex + direction, 0, sceneObjects.Count - 1);
             GameObject selectedObject = sceneObjects[selectedIndex];
+            if (selectedObject == null)
+            {
+                RefreshHierarchy(false);
+                MoveSelection(0);
+                return;
+            }
+
             // Navigation changes only the hierarchy cursor; Enter commits shared selection.
             EditorGUIUtility.PingObject(selectedObject);
             SpeakSafely(GetSpokenName(selectedObject) + ", " + (selectedIndex + 1) + " of " + sceneObjects.Count + ".");
@@ -152,6 +166,37 @@ namespace UnityAccess
             SharedSelection.Select(selectedObject);
         }
 
+        /// <summary>
+        /// Removes the object at the hierarchy cursor through Unity's Undo system.
+        /// </summary>
+        private void RemoveSelectedObject()
+        {
+            if (selectedIndex < 0 || selectedIndex >= sceneObjects.Count)
+            {
+                SpeakSafely("Select a scene object first.");
+                return;
+            }
+
+            GameObject selectedObject = sceneObjects[selectedIndex];
+            if (selectedObject == null)
+            {
+                RefreshHierarchy(false);
+                SpeakSafely("That scene object no longer exists.");
+                Repaint();
+                return;
+            }
+
+            string removedName = selectedObject.name;
+            Undo.DestroyObjectImmediate(selectedObject);
+            RefreshHierarchy(false);
+
+            string message = sceneObjects.Count == 0
+                ? removedName + " removed. " + EmptyHierarchyMessage
+                : removedName + " removed. " + GetSpokenName(sceneObjects[selectedIndex]) + ", " + (selectedIndex + 1) + " of " + sceneObjects.Count + ".";
+            SpeakSafely(message);
+            Repaint();
+        }
+
         private void HandleHierarchyChanged()
         {
             RefreshHierarchy(false);
@@ -160,7 +205,8 @@ namespace UnityAccess
 
         private void RefreshHierarchy(bool announce)
         {
-            int selectedInstanceId = selectedIndex >= 0 && selectedIndex < sceneObjects.Count
+            int previousIndex = selectedIndex;
+            int selectedInstanceId = selectedIndex >= 0 && selectedIndex < sceneObjects.Count && sceneObjects[selectedIndex] != null
                 ? sceneObjects[selectedIndex].GetInstanceID()
                 : 0;
 
@@ -183,7 +229,7 @@ namespace UnityAccess
             selectedIndex = FindObjectIndex(selectedInstanceId);
             if (selectedIndex < 0 && sceneObjects.Count > 0)
             {
-                selectedIndex = 0;
+                selectedIndex = Mathf.Clamp(previousIndex, 0, sceneObjects.Count - 1);
             }
 
             if (announce)
@@ -206,9 +252,14 @@ namespace UnityAccess
 
         private int FindObjectIndex(int instanceId)
         {
+            if (instanceId == 0)
+            {
+                return -1;
+            }
+
             for (int index = 0; index < sceneObjects.Count; index++)
             {
-                if (sceneObjects[index].GetInstanceID() == instanceId)
+                if (sceneObjects[index] != null && sceneObjects[index].GetInstanceID() == instanceId)
                 {
                     return index;
                 }

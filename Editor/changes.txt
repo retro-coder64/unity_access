@@ -112,3 +112,18 @@ tests.txt
 Updated the Escape validation record to cover the deferred hierarchy transition.
 line 1
 line 1
+
+hierarchy/HierarchyAccessibilityWindow.cs
+Added Backspace removal with Unity Undo and NVDA confirmation.
+line 67
+line 201
+
+hierarchy/HierarchyAccessibilityWindow.cs
+Handled destroyed Unity objects safely during drawing, navigation, refresh, and selection restoration.
+line 85
+line 266
+
+inspector/InspectorAccessibilityWindow.cs
+Updated the component viewer with editable string fields, individually navigable Vector2 and Vector3 axes, and NVDA-accessible object-reference selection with Undo support.
+line 521
+line 1131

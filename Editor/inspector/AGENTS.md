@@ -8,17 +8,32 @@ the inspector uses the UnityEditor api and sends text to Nvda using the script @
 the inspector watches the shared data from the hierarchy (hierarchy located in "./hierarchy/")
 the inspector uses the unity editor api to collect the necessary data about the object. 
 the hierarchy and inspector do not call each other. 
-
 ##properties to be shown 
-the inspector will show the following properties 
-1. x position 
-2. y position 
-3. z position 
-4. x rotation 
-5. y rotation 
-6. z rotation 
-7. the child components of the object 
+the inspector will display the properties of the object if they exist 
+the inspector will check the object's serialised properties to determin what to show. 
+the inspector will also show all the components attached to the object 
 
+
+##editable properties 
+the inspector will allow the user to edit the following properties 
+- name of the object
+- the transform of the object where applicable 
+- - x position 
+- - y position 
+- - z position 
+- - x rotation 
+- - y rotation 
+- - z rotation 
+- - x scale 
+- - y scale 
+- - z scale 
+- component properties [properties.md]component.md)
+the user can also remove components by navigating to the component and pressing backspace. 
+
+## adding components 
+at the bottom of the inspector the user can use the add  component button to add a component. 
+when the button is pressed the user will be shown a list of all the components including scripts. 
+they can navigate the list using the arrow keys and select a component using enter 
 ##accessibility requirements 
 the user must be able to use Nvda to navigate the inspector. 
 

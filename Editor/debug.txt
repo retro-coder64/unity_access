@@ -1,1 +1,51 @@
 
+HierarchyAccessibilityWindow
+UnityEngine.MissingReferenceException: The object of type 'UnityEngine.GameObject' has been destroyed but you are still trying to access it.
+Your script should either check if it is null or you should not destroy the object.
+  at UnityEngine.Object+MarshalledUnityObject.TryThrowEditorNullExceptionObject (UnityEngine.Object unityObj, System.String parameterName) [0x0006a] in <2e73e675e85540d691359a460c857383>:0 
+  at UnityEngine.Bindings.ThrowHelper.ThrowNullReferenceException (System.Object obj) [0x00010] in <2e73e675e85540d691359a460c857383>:0 
+  at UnityEngine.GameObject.get_transform () [0x00006] in <2e73e675e85540d691359a460c857383>:0 
+  at UnityAccess.HierarchyAccessibilityWindow.GetHierarchyDepth (UnityEngine.GameObject sceneObject) [0x00002] in C:\Users\Daniel\Python\unity_access\Assets\Editor\hierarchy\HierarchyAccessibilityWindow.cs:234 
+  at UnityAccess.HierarchyAccessibilityWindow.GetDisplayName (UnityEngine.GameObject sceneObject) [0x00000] in C:\Users\Daniel\Python\unity_access\Assets\Editor\hierarchy\HierarchyAccessibilityWindow.cs:222 
+  at UnityAccess.HierarchyAccessibilityWindow.DrawObjectRow (System.Int32 index) [0x00046] in C:\Users\Daniel\Python\unity_access\Assets\Editor\hierarchy\HierarchyAccessibilityWindow.cs:92 
+  at UnityAccess.HierarchyAccessibilityWindow.OnGUI () [0x00048] in C:\Users\Daniel\Python\unity_access\Assets\Editor\hierarchy\HierarchyAccessibilityWindow.cs:72 
+HierarchyAccessibilityWindow
+UnityEngine.MissingReferenceException: The object of type 'UnityEngine.GameObject' has been destroyed but you are still trying to access it.
+Your script should either check if it is null or you should not destroy the object.
+  at UnityEngine.Object+MarshalledUnityObject.TryThrowEditorNullExceptionObject (UnityEngine.Object unityObj, System.String parameterName) [0x0006a] in <2e73e675e85540d691359a460c857383>:0 
+  at UnityEngine.Bindings.ThrowHelper.ThrowNullReferenceException (System.Object obj) [0x00010] in <2e73e675e85540d691359a460c857383>:0 
+  at UnityEngine.GameObject.get_transform () [0x00006] in <2e73e675e85540d691359a460c857383>:0 
+  at UnityAccess.HierarchyAccessibilityWindow.GetHierarchyDepth (UnityEngine.GameObject sceneObject) [0x00002] in C:\Users\Daniel\Python\unity_access\Assets\Editor\hierarchy\HierarchyAccessibilityWindow.cs:234 
+  at UnityAccess.HierarchyAccessibilityWindow.GetDisplayName (UnityEngine.GameObject sceneObject) [0x00000] in C:\Users\Daniel\Python\unity_access\Assets\Editor\hierarchy\HierarchyAccessibilityWindow.cs:222 
+  at UnityAccess.HierarchyAccessibilityWindow.DrawObjectRow (System.Int32 index) [0x00046] in C:\Users\Daniel\Python\unity_access\Assets\Editor\hierarchy\HierarchyAccessibilityWindow.cs:92 
+  at UnityAccess.HierarchyAccessibilityWindow.OnGUI () [0x00048] in C:\Users\Daniel\Python\unity_access\Assets\Editor\hierarchy\HierarchyAccessibilityWindow.cs:72 
+HierarchyAccessibilityWindow
+UnityEngine.MissingReferenceException: The object of type 'UnityEngine.GameObject' has been destroyed but you are still trying to access it.
+Your script should either check if it is null or you should not destroy the object.
+  at UnityEngine.Object+MarshalledUnityObject.TryThrowEditorNullExceptionObject (UnityEngine.Object unityObj, System.String parameterName) [0x0006a] in <2e73e675e85540d691359a460c857383>:0 
+  at UnityEngine.Bindings.ThrowHelper.ThrowNullReferenceException (System.Object obj) [0x00010] in <2e73e675e85540d691359a460c857383>:0 
+  at UnityEngine.GameObject.get_transform () [0x00006] in <2e73e675e85540d691359a460c857383>:0 
+  at UnityAccess.HierarchyAccessibilityWindow.GetHierarchyDepth (UnityEngine.GameObject sceneObject) [0x00002] in C:\Users\Daniel\Python\unity_access\Assets\Editor\hierarchy\HierarchyAccessibilityWindow.cs:234 
+  at UnityAccess.HierarchyAccessibilityWindow.GetDisplayName (UnityEngine.GameObject sceneObject) [0x00000] in C:\Users\Daniel\Python\unity_access\Assets\Editor\hierarchy\HierarchyAccessibilityWindow.cs:222 
+  at UnityAccess.HierarchyAccessibilityWindow.DrawObjectRow (System.Int32 index) [0x00046] in C:\Users\Daniel\Python\unity_access\Assets\Editor\hierarchy\HierarchyAccessibilityWindow.cs:92 
+  at UnityAccess.HierarchyAccessibilityWindow.OnGUI () [0x00048] in C:\Users\Daniel\Python\unity_access\Assets\Editor\hierarchy\HierarchyAccessibilityWindow.cs:72 
+HierarchyAccessibilityWindow
+UnityEngine.MissingReferenceException: The object of type 'UnityEngine.GameObject' has been destroyed but you are still trying to access it.
+Your script should either check if it is null or you should not destroy the object.
+  at UnityEngine.Object+MarshalledUnityObject.TryThrowEditorNullExceptionObject (UnityEngine.Object unityObj, System.String parameterName) [0x0006a] in <2e73e675e85540d691359a460c857383>:0 
+  at UnityEngine.Bindings.ThrowHelper.ThrowNullReferenceException (System.Object obj) [0x00010] in <2e73e675e85540d691359a460c857383>:0 
+  at UnityEngine.GameObject.get_transform () [0x00006] in <2e73e675e85540d691359a460c857383>:0 
+  at UnityAccess.HierarchyAccessibilityWindow.GetHierarchyDepth (UnityEngine.GameObject sceneObject) [0x00002] in C:\Users\Daniel\Python\unity_access\Assets\Editor\hierarchy\HierarchyAccessibilityWindow.cs:234 
+  at UnityAccess.HierarchyAccessibilityWindow.GetDisplayName (UnityEngine.GameObject sceneObject) [0x00000] in C:\Users\Daniel\Python\unity_access\Assets\Editor\hierarchy\HierarchyAccessibilityWindow.cs:222 
+  at UnityAccess.HierarchyAccessibilityWindow.DrawObjectRow (System.Int32 index) [0x00046] in C:\Users\Daniel\Python\unity_access\Assets\Editor\hierarchy\HierarchyAccessibilityWindow.cs:92 
+  at UnityAccess.HierarchyAccessibilityWindow.OnGUI () [0x00048] in C:\Users\Daniel\Python\unity_access\Assets\Editor\hierarchy\HierarchyAccessibilityWindow.cs:72 
+ObjectSelector
+UnityEngine.MissingReferenceException: The object of type 'Unity.AI.Navigation.NavMeshSurface' has been destroyed but you are still trying to access it.
+Your script should either check if it is null or you should not destroy the object. Parameter name: target
+  at UnityEngine.Object+MarshalledUnityObject.TryThrowEditorNullExceptionObject (UnityEngine.Object unityObj, System.String parameterName) [0x0006a] in <2e73e675e85540d691359a460c857383>:0 
+  at UnityEngine.Bindings.ThrowHelper.ThrowArgumentNullException (System.Object obj, System.String parameterName) [0x00010] in <2e73e675e85540d691359a460c857383>:0 
+  at UnityEditor.EditorUtility.SetDirty (UnityEngine.Object target) [0x00015] in <4a6210677a0042ea8ce1fd85759d4494>:0 
+  at UnityAccess.InspectorAccessibilityWindow.ApplyComponentPropertyChange (UnityEditor.SerializedObject serializedObject, System.String label) [0x00007] in C:\Users\Daniel\Python\unity_access\Assets\Editor\inspector\InspectorAccessibilityWindow.cs:846 
+  at UnityAccess.InspectorAccessibilityWindow.ApplyObjectReference (System.String propertyPath, System.String label, UnityEngine.Object selectedObject) [0x00050] in C:\Users\Daniel\Python\unity_access\Assets\Editor\inspector\InspectorAccessibilityWindow.cs:759 
+  at UnityAccess.InspectorAccessibilityWindow+<>c__DisplayClass38_0.<OpenObjectReferenceSelector>b__0 (UnityEngine.Object selectedObject) [0x00000] in C:\Users\Daniel\Python\unity_access\Assets\Editor\inspector\InspectorAccessibilityWindow.cs:720 
+  at UnityAccess.ObjectSelector.CommitSelection () [0x0004a] in C:\Users\Daniel\Python\unity_access\Assets\Editor\utils\object_selector.cs:143 

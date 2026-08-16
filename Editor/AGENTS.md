@@ -4,6 +4,7 @@ an accessibility plugin for the unity editor version 6.3, written in c#.
 unity_access/ (root directory of the project do not edit)
 unity_access/Assets/Editor/
 unity_access/Assets/Editor/unity_access.cs (will be the main file of the plugin)
+unity_access/Assets/Editor/utils/ (where utility files will be placed)
 unity_access/Assets/Editor/tests/
 unity_access/Assets/Editor/inspector/
 unity_access/AssetsEditor/hierarchy/

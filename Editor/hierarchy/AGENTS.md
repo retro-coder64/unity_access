@@ -12,7 +12,8 @@ it will also start when the user starts the unity_access plugin.
 ## selecting an item 
 the user will select an item by pressing enter 
 the script will then pass the name to the inspector script (reference "./inspector/")
-
+## removing an item 
+an object can be removed from the seen by navigating to the object and pressing backspace. 
 ## NVDA access 
 the hierarchy view will pass the data that is to be spoken allowed to the script located @ "./NvdaApi.cs" 
 
