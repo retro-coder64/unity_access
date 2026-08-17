@@ -717,7 +717,11 @@ namespace UnityAccess
             Type requiredType = currentValue == null
                 ? ResolveObjectReferenceType(property.type)
                 : currentValue.GetType();
-            ObjectSelector.Open(requiredType, selectedObject => ApplyObjectReference(item.PropertyPath, item.Label, selectedObject), currentValue);
+            ObjectSelector.Open(
+                requiredType,
+                inspectedComponent,
+                currentValue,
+                selectedObject => ApplyObjectReference(item.PropertyPath, item.Label, selectedObject));
         }
 
         private static Type ResolveObjectReferenceType(string serializedType)

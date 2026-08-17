@@ -1,17 +1,74 @@
 # object_selector.md
-## overview 
-the object_selector will provide an accessible selection interface for the user to select the object based on the type of reference. 
-it should not contain any component specific logic for an animator or any other component. 
-the file name is object_selector.cs
-## requirements
-the selector should accept the type of object 
-find only the objects that match that type 
-search in seen and accross assets where unity permits it to do so 
-display the list as a sorted list that the user can navigate through and select from
-it should also give the option of none. 
-it should return the object reference that was selected for the script that called it to fill in the required field. 
-the selector ui should pass data to the Nvda api script located in the root directory 
-the user must be able to navigat the list with the arrow keys 
-## exiting the selection 
-if the user selects an option the selection should automatically exit back to the window they were last in. 
-if they press esc it should perform the same action and not return anything. 
+
+## Overview
+object_selector.cs provides an accessible selector for Unity object references.
+
+It must be generic and contain no component-specific logic.
+
+## Requirements
+The selector must receive:
+- the required object Type
+- the object that owns the reference field
+- the current reference
+- a way to return the selected reference
+
+Use EditorUtility.IsPersistent(owner) to determine where references may come from.
+
+If the owner is a scene object:
+- search compatible objects in the open scene
+- search compatible project assets
+
+If the owner is a persistent asset:
+- search compatible project assets only
+- do not allow scene references
+
+Do not use the current reference to decide the search scope because it may be null.
+
+Only show objects compatible with the required Type.
+
+Use AssetDatabase to search project assets.
+
+Scene results must exclude persistent assets.
+
+The list must:
+- include None
+- be sorted
+- identify whether each result is a scene object or asset
+- allow navigation with the Up and Down arrow keys
+- announce the focused item through the NVDA API
+
+## Selection
+When an item is selected:
+- return its UnityEngine.Object reference
+- close the selector
+- return focus to the previous window
+
+Selecting None returns null.
+
+Pressing Escape cancels the selector without changing the existing value and returns focus to the previous window.
+
+## searching 
+at the top of the selection screen there should be a search box to search for what the user is looking for 
+the user should be able to edit in the box and the search term should be found using the current logic or as small a change as possible 
+if no items are found show no results. 
+make it an editable text box with a label that NVDA can read place it above the none option. 
+## Important APIs
+EditorUtility.IsPersistent(owner)
+- true = owner is an asset, so scene references are not allowed
+- false = owner is a scene object, so scene references are allowed
+
+AssetDatabase.FindAssets
+- use to search compatible project assets
+
+## opening the selector
+object_selector.cs must have only one public Open method.
+
+The public Open method must require:
+- required type
+- owner
+- current value
+- callback
+
+Do not provide a public overload which allows the owner to be omitted.
+
+Internal helper methods may accept the calculated reference scope but must be private.

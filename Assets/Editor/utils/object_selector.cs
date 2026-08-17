@@ -6,29 +6,67 @@ using UnityEngine;
 namespace UnityAccess
 {
     /// <summary>
+    /// Restricts which kind of Unity object reference is shown by the selector.
+    /// </summary>
+    public enum ObjectReferenceScope
+    {
+        SceneObjects,
+        Assets,
+        SceneObjectsAndAssets
+    }
+
+    /// <summary>
     /// Provides a keyboard-driven, NVDA-accessible picker for Unity object references.
     /// </summary>
     public sealed class ObjectSelector : EditorWindow
     {
         private const float RowHeight = 20.0f;
 
+        private readonly List<SelectorEntry> allEntries = new List<SelectorEntry>();
         private readonly List<SelectorEntry> entries = new List<SelectorEntry>();
         private Type requiredType;
+        private ObjectReferenceScope referenceScope;
         private Action<UnityEngine.Object> selectionCallback;
         private EditorWindow returnWindow;
         private int selectedIndex;
         private Vector2 scrollPosition;
+        private string searchText = string.Empty;
+        private string appliedSearchText = string.Empty;
+        private bool focusSearchField = true;
 
         /// <summary>
-        /// Opens a selector containing objects assignable to <paramref name="objectType"/>.
+        /// Opens a selector whose allowed reference sources are derived from the field owner.
         /// </summary>
         /// <param name="objectType">The required Unity object type.</param>
+        /// <param name="owner">The scene object or persistent asset that owns the reference field.</param>
+        /// <param name="currentValue">The field's current value, used only as the initial selection.</param>
         /// <param name="onSelected">Called with the chosen object, or null when None is chosen.</param>
-        /// <param name="currentValue">The field's current value, used as the initial selection.</param>
         public static void Open(
             Type objectType,
+            UnityEngine.Object owner,
+            UnityEngine.Object currentValue,
+            Action<UnityEngine.Object> onSelected)
+        {
+            if (owner == null)
+            {
+                throw new ArgumentNullException(nameof(owner));
+            }
+
+            ObjectReferenceScope scope = EditorUtility.IsPersistent(owner)
+                ? ObjectReferenceScope.Assets
+                : ObjectReferenceScope.SceneObjectsAndAssets;
+            OpenInternal(objectType, onSelected, currentValue, scope);
+        }
+
+        /// <summary>
+        /// Internal implementation used after the public Open method has derived the valid
+        /// reference scope from the object that owns the field.
+        /// </summary>
+        private static void OpenInternal(
+            Type objectType,
             Action<UnityEngine.Object> onSelected,
-            UnityEngine.Object currentValue = null)
+            UnityEngine.Object currentValue,
+            ObjectReferenceScope scope)
         {
             if (objectType == null)
             {
@@ -45,6 +83,11 @@ namespace UnityAccess
                 throw new ArgumentNullException(nameof(onSelected));
             }
 
+            if (!Enum.IsDefined(typeof(ObjectReferenceScope), scope))
+            {
+                throw new ArgumentOutOfRangeException(nameof(scope));
+            }
+
             try
             {
                 EditorWindow previousWindow = focusedWindow;
@@ -52,12 +95,13 @@ namespace UnityAccess
                 window.titleContent = new GUIContent("Select " + objectType.Name);
                 window.minSize = new Vector2(320.0f, 220.0f);
                 window.requiredType = objectType;
+                window.referenceScope = scope;
                 window.selectionCallback = onSelected;
                 window.returnWindow = previousWindow;
                 window.BuildEntries(currentValue);
                 window.ShowAuxWindow();
                 window.Focus();
-                window.SpeakCurrentEntry("Object selector opened. ");
+                window.SpeakSearchField("Object selector opened. ");
             }
             catch (Exception exception)
             {
@@ -73,11 +117,20 @@ namespace UnityAccess
                 HandleKeyboard(Event.current);
 
                 EditorGUILayout.LabelField("Select " + requiredType.Name, EditorStyles.boldLabel);
+                DrawSearchField();
+                ApplySearchFilterIfNeeded();
                 EditorGUILayout.LabelField("Up or Down moves, Enter selects, Escape cancels.");
                 scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
-                for (int index = 0; index < entries.Count; index++)
+                if (entries.Count == 0)
                 {
-                    DrawEntry(index);
+                    EditorGUILayout.LabelField("No results.");
+                }
+                else
+                {
+                    for (int index = 0; index < entries.Count; index++)
+                    {
+                        DrawEntry(index);
+                    }
                 }
 
                 EditorGUILayout.EndScrollView();
@@ -87,6 +140,25 @@ namespace UnityAccess
                 PluginErrorLog.Write(nameof(ObjectSelector), exception);
                 CloseAndRestoreFocus();
             }
+        }
+
+        private void DrawSearchField()
+        {
+            EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
+            GUI.SetNextControlName("ObjectSelectorSearch");
+            string updatedSearchText = EditorGUILayout.TextField(
+                new GUIContent("Search objects"),
+                searchText,
+                EditorStyles.toolbarSearchField,
+                GUILayout.ExpandWidth(true));
+            EditorGUILayout.EndHorizontal();
+            if (focusSearchField)
+            {
+                GUI.FocusControl("ObjectSelectorSearch");
+                focusSearchField = false;
+            }
+
+            searchText = updatedSearchText;
         }
 
         private void HandleKeyboard(Event currentEvent)
@@ -123,6 +195,12 @@ namespace UnityAccess
 
         private void MoveSelection(int direction)
         {
+            if (entries.Count == 0)
+            {
+                SpeakSafely("No results.");
+                return;
+            }
+
             selectedIndex = Mathf.Clamp(selectedIndex + direction, 0, entries.Count - 1);
             scrollPosition.y = Mathf.Max(0.0f, (selectedIndex - 2) * RowHeight);
             SpeakCurrentEntry(string.Empty);
@@ -131,6 +209,12 @@ namespace UnityAccess
 
         private void CommitSelection()
         {
+            if (entries.Count == 0)
+            {
+                SpeakSafely("No results.");
+                return;
+            }
+
             SelectorEntry selectedEntry = entries[selectedIndex];
             Action<UnityEngine.Object> callback = selectionCallback;
             selectionCallback = null;
@@ -180,9 +264,18 @@ namespace UnityAccess
             entries.Add(new SelectorEntry(null, "None"));
 
             HashSet<int> knownInstanceIds = new HashSet<int>();
-            AddLoadedObjects(knownInstanceIds);
-            AddAssetObjects(knownInstanceIds);
+            if (referenceScope != ObjectReferenceScope.Assets)
+            {
+                AddLoadedObjects(knownInstanceIds);
+            }
+
+            if (referenceScope != ObjectReferenceScope.SceneObjects)
+            {
+                AddAssetObjects(knownInstanceIds);
+            }
             entries.Sort(1, entries.Count - 1, SelectorEntryComparer.Instance);
+            allEntries.Clear();
+            allEntries.AddRange(entries);
 
             selectedIndex = 0;
             if (currentValue == null)
@@ -200,6 +293,45 @@ namespace UnityAccess
             }
         }
 
+        private void ApplySearchFilterIfNeeded(bool force = false)
+        {
+            if (!force && string.Equals(searchText, appliedSearchText, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            appliedSearchText = searchText;
+            entries.Clear();
+            foreach (SelectorEntry entry in allEntries)
+            {
+                if (string.IsNullOrWhiteSpace(searchText) ||
+                    entry.DisplayName.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    entries.Add(entry);
+                }
+            }
+
+            selectedIndex = 0;
+            scrollPosition = Vector2.zero;
+            if (entries.Count == 0)
+            {
+                SpeakSearchField("No results. ");
+            }
+            else
+            {
+                string resultCount = entries.Count + (entries.Count == 1 ? " result. " : " results. ");
+                SpeakSearchField(resultCount);
+            }
+
+            Repaint();
+        }
+
+        private void SpeakSearchField(string prefix = "")
+        {
+            string value = string.IsNullOrEmpty(searchText) ? "empty" : searchText;
+            SpeakSafely(prefix + "Search objects, editable text box, " + value + ".");
+        }
+
         private void AddLoadedObjects(HashSet<int> knownInstanceIds)
         {
             UnityEngine.Object[] loadedObjects = Resources.FindObjectsOfTypeAll(requiredType);
@@ -215,6 +347,13 @@ namespace UnityAccess
         private void AddAssetObjects(HashSet<int> knownInstanceIds)
         {
             string[] assetGuids = AssetDatabase.FindAssets(GetAssetSearchFilter());
+            if (assetGuids.Length == 0)
+            {
+                // Some imported asset types, including audio in certain import states,
+                // are absent from Unity's type index even though they load correctly.
+                assetGuids = AssetDatabase.FindAssets(string.Empty);
+            }
+
             foreach (string assetGuid in assetGuids)
             {
                 string assetPath = AssetDatabase.GUIDToAssetPath(assetGuid);
@@ -234,20 +373,38 @@ namespace UnityAccess
                 }
                 else
                 {
-                    UnityEngine.Object[] assetObjects = AssetDatabase.LoadAllAssetsAtPath(assetPath);
-                    foreach (UnityEngine.Object assetObject in assetObjects)
+                    UnityEngine.Object mainAsset = AssetDatabase.LoadMainAssetAtPath(assetPath);
+                    AddAssetIfCompatible(mainAsset, assetPath, knownInstanceIds);
+
+                    UnityEngine.Object[] subAssets = AssetDatabase.LoadAllAssetRepresentationsAtPath(assetPath);
+                    foreach (UnityEngine.Object subAsset in subAssets)
                     {
-                        if (assetObject != null && requiredType.IsAssignableFrom(assetObject.GetType()))
-                        {
-                            AddEntry(assetObject, assetPath, knownInstanceIds);
-                        }
+                        AddAssetIfCompatible(subAsset, assetPath, knownInstanceIds);
                     }
                 }
             }
         }
 
+        private void AddAssetIfCompatible(
+            UnityEngine.Object candidate,
+            string assetPath,
+            HashSet<int> knownInstanceIds)
+        {
+            if (candidate != null && requiredType.IsAssignableFrom(candidate.GetType()))
+            {
+                AddEntry(candidate, assetPath, knownInstanceIds);
+            }
+        }
+
         private string GetAssetSearchFilter()
         {
+            // UnityEngine.Object is the generic fallback for unresolved or broadly typed fields.
+            // Searching without a type filter ensures assets such as AudioClip are not omitted.
+            if (requiredType == typeof(UnityEngine.Object))
+            {
+                return string.Empty;
+            }
+
             if (typeof(Component).IsAssignableFrom(requiredType) || typeof(GameObject).IsAssignableFrom(requiredType))
             {
                 return "t:Prefab";
@@ -272,12 +429,14 @@ namespace UnityAccess
         {
             Component component = candidate as Component;
             GameObject gameObject = component != null ? component.gameObject : candidate as GameObject;
+            string referenceKind = EditorUtility.IsPersistent(candidate) ? "Asset" : "Scene object";
+            string location = source;
             if (source == "Scene" && gameObject != null)
             {
-                return gameObject.scene.name + "/" + GetHierarchyPath(gameObject.transform);
+                location = gameObject.scene.name + "/" + GetHierarchyPath(gameObject.transform);
             }
 
-            return source;
+            return candidate.GetType().Name + " - " + referenceKind + " - " + location;
         }
 
         private static string GetHierarchyPath(Transform transform)
@@ -295,6 +454,13 @@ namespace UnityAccess
 
         private void AddEntry(UnityEngine.Object candidate, string source, HashSet<int> knownInstanceIds)
         {
+            bool isAsset = EditorUtility.IsPersistent(candidate);
+            if ((referenceScope == ObjectReferenceScope.Assets && !isAsset) ||
+                (referenceScope == ObjectReferenceScope.SceneObjects && isAsset))
+            {
+                return;
+            }
+
             if (!knownInstanceIds.Add(candidate.GetInstanceID()))
             {
                 return;

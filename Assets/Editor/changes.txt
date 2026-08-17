@@ -127,3 +127,98 @@ inspector/InspectorAccessibilityWindow.cs
 Updated the component viewer with editable string fields, individually navigable Vector2 and Vector3 axes, and NVDA-accessible object-reference selection with Undo support.
 line 521
 line 1131
+
+utils/object_selector.cs
+Added and validated a caller-selectable reference scope for scene objects, assets, or both.
+line 7
+line 71
+
+utils/object_selector.cs
+Limited scene and asset discovery according to the requested reference scope.
+line 202
+line 210
+
+utils/object_selector.cs
+Classified candidates with EditorUtility.IsPersistent and included concrete object type and reference kind in the NVDA-visible entry text.
+line 296
+line 334
+
+utils/object_selector.cs
+Added a full Asset Database fallback when Unity's type index returns no results, while retaining assignable-type filtering so imported audio assets can be selected.
+line 241
+line 249
+
+utils/object_selector.cs
+Added an owner-aware selector entry point that uses EditorUtility.IsPersistent(owner) to allow scene references only for scene-object owners without using the current reference to determine scope.
+line 33
+line 55
+
+utils/object_selector.cs
+Changed generic UnityEngine.Object asset searches to scan the complete Asset Database so compatible assets, including audio clips, are not omitted.
+line 307
+line 321
+
+utils/object_selector.cs
+Replaced the outdated public scope overload with the corrected private OpenInternal implementation so callers must supply the reference owner.
+line 57
+line 87
+
+inspector/InspectorAccessibilityWindow.cs
+Updated the object selector call to pass inspectedComponent as the field owner and use the corrected owner-aware method signature.
+line 720
+line 724
+
+utils/object_selector_corrected.cs
+Removed the temporary corrected source after verifying object_selector.cs matched it, preventing duplicate ObjectSelector and ObjectReferenceScope declarations in Unity.
+line 1
+line 414
+
+utils/object_selector.cs
+Added an automatically focused search text box and a visible No results state to the top of the object selector.
+line 25
+line 158
+
+utils/object_selector.cs
+Made keyboard selection safe when a search has no matches, announcing No results through NVDA instead of selecting an invalid entry.
+line 192
+line 218
+
+utils/object_selector.cs
+Preserved the sorted source entries and added case-insensitive in-memory filtering with NVDA result-count and focused-item announcements.
+line 257
+line 317
+
+utils/object_selector.cs
+Rendered the search control as a clearly visible full-width Unity toolbar search field with an explicit Search label.
+line 143
+line 164
+
+utils/object_selector.cs
+Replaced LoadAllAssetsAtPath with safe main-asset and sub-asset loading so scene files do not generate repeated errors while the selector opens.
+line 366
+line 389
+
+utils/object_selector.cs
+Attached the Search objects label directly to the editable toolbar text field and announced the focused editable control through NVDA when the selector opens.
+line 103
+line 156
+
+utils/object_selector.cs
+Moved Search objects into the selector's navigable list before None, added Up and Down navigation between the search field and results, prevented Enter from selecting while editing search, and announced search focus and value through NVDA.
+line 35
+line 373
+
+utils/object_selector.cs
+Added an explicit search editing mode: Enter begins and finishes text editing, Escape finishes editing without closing the selector, and NVDA announces the editing state and activation instruction.
+line 36
+line 419
+
+utils/object_selector.cs
+Made search filtering compare the current text against the last applied query every GUI cycle and force a final refresh when editing finishes, ensuring typed content updates the visible results.
+line 34
+line 416
+
+utils/object_selector.cs
+Reverted the search UI to the original automatically focused toolbar field above the selection list and removed the list-item selection and Enter-to-edit modes; live filtering remains enabled.
+line 33
+line 325
