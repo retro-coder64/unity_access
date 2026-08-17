@@ -1,0 +1,21 @@
+# Ignore everything by default
+*
+
+# Keep the gitignore itself
+!/.gitignore
+
+# Keep the README
+!/README.md
+
+# Allow Git to enter the Assets folder
+!/Assets/
+
+# Ignore everything directly inside Assets
+/Assets/*
+
+# Keep the Editor folder and everything beneath it
+!/Assets/Editor/
+!/Assets/Editor/**
+
+# Keep Unity's meta file for the Editor folder
+!/Assets/Editor.meta
