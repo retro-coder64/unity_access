@@ -1,0 +1,14 @@
+{
+    "name": "UnityAccess.AccessibleConsole.Editor.Tests",
+    "rootNamespace": "UnityAccess.Tests",
+    "references": [
+        "UnityAccess.AccessibleConsole.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ],
+    "autoReferenced": false
+}

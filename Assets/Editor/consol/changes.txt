@@ -1,0 +1,60 @@
+AccessibleConsoleWindow.cs
+Added the accessible read-only console window, session-wide Unity log capture, automatic error opening, keyboard navigation, copying, clearing, closing, and required message colours.
+1
+325
+NvdaApi.cs
+Added the reusable, failure-safe NVDA controller client bridge.
+1
+45
+ConsoleDiagnostics.cs
+Added non-recursive plugin error recording to debug.txt.
+1
+29
+AssemblyInfo.cs
+Allowed the isolated test assembly to validate internal console models.
+1
+3
+UnityAccess.AccessibleConsole.Editor.asmdef
+Added an editor-only production assembly definition.
+1
+8
+tests/AccessibleConsoleTests.cs
+Added tests for copied message contents and required log colours.
+1
+45
+tests/UnityAccess.AccessibleConsole.Editor.Tests.asmdef
+Added an editor-only test assembly isolated from production code.
+1
+14
+tests.txt
+Recorded the accessible console test file and test names.
+1
+5
+debug.txt
+Added the required plugin error log target.
+1
+1
+AccessibleConsoleWindow.cs
+Changed the conflicting Ctrl+Shift+C shortcut to Ctrl+Alt+C and placed the Clear console button in an always-visible fixed toolbar.
+18
+59
+AccessibleConsoleWindow.cs
+Rebuilt Clear console using the inspector's explicit control-rectangle pattern and added arrow-key selection, Enter activation, NVDA feedback, and guarded GUI error recording.
+17
+185
+AccessibleConsoleWindow.cs
+Rebuilt the complete console using the working hierarchy and inspector patterns: focused keyboard events, one navigable cursor for Clear Console and messages, direct NVDA speech on every action, automatic error opening, copying, closing, focus restoration, and accessible type descriptions.
+1
+325
+NvdaApi.cs
+Replaced the silent incompatible NVDA bridge with the bundled nvdaControllerClient.dll implementation used by the working plugin components, including running checks and speech cancellation.
+1
+52
+tests/AccessibleConsoleTests.cs
+Added coverage confirming that the exact log type and message passed to NVDA are complete and correctly ordered.
+38
+45
+tests.txt
+Recorded the rebuilt console speech test.
+5
+5

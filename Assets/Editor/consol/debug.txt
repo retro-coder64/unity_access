@@ -1,0 +1,20 @@
+AccessibleConsoleWindow
+UnityEngine.ExitGUIException: Exception of type 'UnityEngine.ExitGUIException' was thrown.
+  at UnityEngine.GUIUtility.ExitGUI () [0x0000c] in <31f0ae77adf846b582e8cd11bc8d4d24>:0 
+  at UnityAccess.Console.AccessibleConsoleWindow.HandleKeyboard (UnityEngine.Event currentEvent) [0x0001a] in C:\Users\Daniel\Python\unity_access\Assets\Editor\consol\AccessibleConsoleWindow.cs:124 
+  at UnityAccess.Console.AccessibleConsoleWindow.OnGUI () [0x00000] in C:\Users\Daniel\Python\unity_access\Assets\Editor\consol\AccessibleConsoleWindow.cs:53 
+AccessibleConsoleWindow
+UnityEngine.ExitGUIException: Exception of type 'UnityEngine.ExitGUIException' was thrown.
+  at UnityEngine.GUIUtility.ExitGUI () [0x0000c] in <31f0ae77adf846b582e8cd11bc8d4d24>:0 
+  at UnityAccess.Console.AccessibleConsoleWindow.HandleKeyboard (UnityEngine.Event currentEvent) [0x0001a] in C:\Users\Daniel\Python\unity_access\Assets\Editor\consol\AccessibleConsoleWindow.cs:124 
+  at UnityAccess.Console.AccessibleConsoleWindow.OnGUI () [0x00000] in C:\Users\Daniel\Python\unity_access\Assets\Editor\consol\AccessibleConsoleWindow.cs:53 
+AccessibleConsoleWindow
+UnityEngine.ExitGUIException: Exception of type 'UnityEngine.ExitGUIException' was thrown.
+  at UnityEngine.GUIUtility.ExitGUI () [0x0000c] in <31f0ae77adf846b582e8cd11bc8d4d24>:0 
+  at UnityAccess.Console.AccessibleConsoleWindow.HandleKeyboard (UnityEngine.Event currentEvent) [0x0001a] in C:\Users\Daniel\Python\unity_access\Assets\Editor\consol\AccessibleConsoleWindow.cs:124 
+  at UnityAccess.Console.AccessibleConsoleWindow.OnGUI () [0x00000] in C:\Users\Daniel\Python\unity_access\Assets\Editor\consol\AccessibleConsoleWindow.cs:53 
+AccessibleConsoleWindow
+UnityEngine.ExitGUIException: Exception of type 'UnityEngine.ExitGUIException' was thrown.
+  at UnityEngine.GUIUtility.ExitGUI () [0x0000c] in <31f0ae77adf846b582e8cd11bc8d4d24>:0 
+  at UnityAccess.Console.AccessibleConsoleWindow.HandleKeyboard (UnityEngine.Event currentEvent) [0x0001a] in C:\Users\Daniel\Python\unity_access\Assets\Editor\consol\AccessibleConsoleWindow.cs:124 
+  at UnityAccess.Console.AccessibleConsoleWindow.OnGUI () [0x00000] in C:\Users\Daniel\Python\unity_access\Assets\Editor\consol\AccessibleConsoleWindow.cs:53 

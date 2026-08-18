@@ -1,0 +1,8 @@
+{
+    "name": "UnityAccess.AccessibleConsole.Editor",
+    "rootNamespace": "UnityAccess",
+    "includePlatforms": [
+        "Editor"
+    ],
+    "autoReferenced": true
+}

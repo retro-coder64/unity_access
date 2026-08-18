@@ -1,0 +1,5 @@
+tests/AccessibleConsoleTests.cs
+CopyText_IncludesMessageAndStackTrace
+ErrorTypes_UseRedText
+Warning_UsesOrangeText
+AccessibleText_IncludesTypeAndMessage
