@@ -144,21 +144,9 @@ namespace UnityAccess
 
         private void DrawSearchField()
         {
-            EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
-            GUI.SetNextControlName("ObjectSelectorSearch");
-            string updatedSearchText = EditorGUILayout.TextField(
-                new GUIContent("Search objects"),
-                searchText,
-                EditorStyles.toolbarSearchField,
-                GUILayout.ExpandWidth(true));
-            EditorGUILayout.EndHorizontal();
-            if (focusSearchField)
-            {
-                GUI.FocusControl("ObjectSelectorSearch");
-                focusSearchField = false;
-            }
-
-            searchText = updatedSearchText;
+            searchText = AccessibleControls.ToolbarSearch(
+                "ObjectSelectorSearch", "Search objects", searchText, focusSearchField);
+            focusSearchField = false;
         }
 
         private void HandleKeyboard(Event currentEvent)
@@ -201,8 +189,8 @@ namespace UnityAccess
                 return;
             }
 
-            selectedIndex = Mathf.Clamp(selectedIndex + direction, 0, entries.Count - 1);
-            scrollPosition.y = Mathf.Max(0.0f, (selectedIndex - 2) * RowHeight);
+            selectedIndex = AccessibleList.Move(selectedIndex, direction, entries.Count);
+            AccessibleList.KeepVisible(ref scrollPosition, selectedIndex, RowHeight);
             SpeakCurrentEntry(string.Empty);
             Repaint();
         }
@@ -474,19 +462,12 @@ namespace UnityAccess
         private void SpeakCurrentEntry(string prefix)
         {
             SpeakSafely(prefix + entries[selectedIndex].DisplayName + ", " +
-                (selectedIndex + 1) + " of " + entries.Count + ".");
+                AccessibleList.Position(selectedIndex, entries.Count) + ".");
         }
 
         private static void SpeakSafely(string message)
         {
-            try
-            {
-                NvdaApi.Speak(message);
-            }
-            catch (Exception exception)
-            {
-                PluginErrorLog.Write(nameof(ObjectSelector), exception);
-            }
+            AccessibleSpeech.Speak(message, nameof(ObjectSelector));
         }
 
         private sealed class SelectorEntry

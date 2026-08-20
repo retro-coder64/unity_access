@@ -46,5 +46,24 @@ all code must be clearly commented
 ## useful commands 
 use UnityEditor
 
+## useful scripts 
+use the following scripts located in the /utils folder 
+- AccessibleControls.cs for buttons, editable text boxes and tool bars search fields.. 
+- 
+  - AccessibleEditorStyles.cs
+    Defines the shared blue selection highlight and draws it behind selected controls.
+- AccessibleTextEdit.cs
+
+    Stores whether a text box is being edited and manages its value and begin/end editing lifecycle.
+    - accessibleList.cs
+    Handles list selection movement, index clamping, “X of Y” announcements, automatic scrolling, and selected-row
+    rendering.
+- AccessibleSpeech.cs
+    Sends text through the existing NvdaApi. Speech errors are safely recorded through PluginErrorLog.
+
+
+
+
+
 ## startup 
 give the unity access plugin a button to start it in the menu bar 

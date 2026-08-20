@@ -83,15 +83,9 @@ namespace UnityAccess
         private void DrawObjectRow(int index)
         {
             GameObject sceneObject = sceneObjects[index];
-            Rect row = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
-            if (index == selectedIndex)
-            {
-                EditorGUI.DrawRect(row, new Color(0.24f, 0.49f, 0.90f, 0.45f));
-            }
-
             // Unity objects compare equal to null immediately after external destruction.
             string displayName = sceneObject == null ? "Object removed" : GetDisplayName(sceneObject);
-            EditorGUI.LabelField(row, displayName, EditorStyles.label);
+            AccessibleList.DrawLabelRow(displayName, index == selectedIndex);
         }
 
         private void HandleKeyboardInput(Event currentEvent)
@@ -136,7 +130,7 @@ namespace UnityAccess
                 return;
             }
 
-            selectedIndex = Mathf.Clamp(selectedIndex + direction, 0, sceneObjects.Count - 1);
+            selectedIndex = AccessibleList.Move(selectedIndex, direction, sceneObjects.Count);
             GameObject selectedObject = sceneObjects[selectedIndex];
             if (selectedObject == null)
             {
@@ -147,7 +141,8 @@ namespace UnityAccess
 
             // Navigation changes only the hierarchy cursor; Enter commits shared selection.
             EditorGUIUtility.PingObject(selectedObject);
-            SpeakSafely(GetSpokenName(selectedObject) + ", " + (selectedIndex + 1) + " of " + sceneObjects.Count + ".");
+            SpeakSafely(GetSpokenName(selectedObject) + ", " +
+                AccessibleList.Position(selectedIndex, sceneObjects.Count) + ".");
             Repaint();
         }
 
@@ -294,14 +289,7 @@ namespace UnityAccess
 
         private static void SpeakSafely(string message)
         {
-            try
-            {
-                NvdaApi.Speak(message);
-            }
-            catch (Exception exception)
-            {
-                PluginErrorLog.Write(nameof(HierarchyAccessibilityWindow), exception);
-            }
+            AccessibleSpeech.Speak(message, nameof(HierarchyAccessibilityWindow));
         }
     }
 

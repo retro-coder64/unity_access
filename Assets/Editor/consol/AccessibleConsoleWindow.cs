@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
-using UnityAccess.Accessibility;
 
 namespace UnityAccess.Console
 {
@@ -51,7 +50,7 @@ namespace UnityAccess.Console
             }
             catch (Exception exception)
             {
-                ConsoleDiagnostics.Record(nameof(AccessibleConsoleWindow), exception);
+                PluginErrorLog.Write(nameof(AccessibleConsoleWindow), exception);
                 EditorUtility.DisplayDialog(
                     "Unity Access NVDA error",
                     "The console could not communicate with NVDA. See Assets/Editor/consol/debug.txt for details.",
@@ -79,7 +78,7 @@ namespace UnityAccess.Console
             }
             catch (Exception exception)
             {
-                ConsoleDiagnostics.Record(nameof(AccessibleConsoleWindow), exception);
+                PluginErrorLog.Write(nameof(AccessibleConsoleWindow), exception);
             }
         }
 
@@ -89,13 +88,10 @@ namespace UnityAccess.Console
             EditorGUILayout.LabelField("Up and Down navigate. Enter clears on Clear Console. Ctrl+C copies a message. Escape closes.");
 
             // Clear is a normal cursor row, matching the working inspector action-row pattern.
-            Rect clearRow = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
-            if (selectedIndex == ClearControlIndex)
+            if (AccessibleControls.Button("Clear Console, button. Press Enter.", selectedIndex == ClearControlIndex))
             {
-                EditorGUI.DrawRect(clearRow, new Color(0.24f, 0.49f, 0.90f, 0.45f));
+                ActivateSelection();
             }
-
-            EditorGUI.LabelField(clearRow, "Clear Console, button. Press Enter.", EditorStyles.boldLabel);
 
             scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
             for (int index = 0; index < Entries.Count; index++)
@@ -108,15 +104,10 @@ namespace UnityAccess.Console
 
         private void DrawMessageRow(int index, ConsoleLogEntry entry)
         {
-            Rect row = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight * 2.0f);
-            if (index == selectedIndex)
-            {
-                EditorGUI.DrawRect(row, new Color(0.24f, 0.49f, 0.90f, 0.45f));
-            }
-
             GUIStyle messageStyle = new GUIStyle(EditorStyles.wordWrappedLabel);
             messageStyle.normal.textColor = GetLogColor(entry.Type);
-            EditorGUI.LabelField(row, entry.DisplayText, messageStyle);
+            AccessibleList.DrawLabelRow(entry.DisplayText, index == selectedIndex, messageStyle,
+                EditorGUIUtility.singleLineHeight * 2.0f);
         }
 
         private void HandleKeyboardInput(Event currentEvent)
@@ -209,7 +200,7 @@ namespace UnityAccess.Console
             }
 
             ConsoleLogEntry entry = Entries[selectedIndex];
-            return entry.AccessibleText + ", " + (selectedIndex + 1) + " of " + Entries.Count + ".";
+            return entry.AccessibleText + ", " + AccessibleList.Position(selectedIndex, Entries.Count) + ".";
         }
 
         private void HandleLogStoreChanged()
@@ -236,14 +227,7 @@ namespace UnityAccess.Console
 
         private static void SpeakSafely(string message)
         {
-            try
-            {
-                NvdaApi.Speak(message);
-            }
-            catch (Exception exception)
-            {
-                ConsoleDiagnostics.Record(nameof(AccessibleConsoleWindow), exception);
-            }
+            AccessibleSpeech.Speak(message, nameof(AccessibleConsoleWindow));
         }
 
         internal static Color GetLogColor(LogType type)

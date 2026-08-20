@@ -222,3 +222,63 @@ utils/object_selector.cs
 Reverted the search UI to the original automatically focused toolbar field above the selection list and removed the list-item selection and Enter-to-edit modes; live filtering remains enabled.
 line 33
 line 325
+
+UnityAccess.Editor.asmdef
+Added a shared editor assembly so every accessibility window can consume one utility implementation.
+line 1
+line 8
+
+utils/AccessibleSpeech.cs
+Added common safe NVDA speech backed by the existing NvdaApi and PluginErrorLog.
+line 1
+line 20
+
+utils/AccessibleKeyboard.cs
+Added standard confirm, cancel, and vertical-navigation key recognition.
+line 1
+line 42
+
+utils/AccessibleList.cs
+Added common list selection, position announcements, scrolling, and row rendering.
+line 1
+line 41
+
+utils/AccessibleControls.cs
+Added standard accessible button, text-box, and toolbar-search rendering.
+line 1
+line 48
+
+utils/AccessibleEditorStyles.cs
+Added the shared selected-control highlight style.
+line 1
+line 20
+
+utils/AccessibleTextEdit.cs
+Added reusable state for beginning, updating, committing, and cancelling text-box edits.
+line 1
+line 20
+
+inspector/InspectorAccessibilityWindow.cs
+Replaced local styles, text fields, edit state, list selection, position speech, and safe speech with shared utilities.
+line 17
+line 1022
+
+hierarchy/HierarchyAccessibilityWindow.cs
+Replaced local row rendering, list movement, position speech, and safe speech with shared utilities.
+line 83
+line 293
+
+utils/object_selector.cs
+Replaced local search rendering, list movement, scrolling, position speech, and safe speech with shared utilities.
+line 145
+line 471
+
+consol/AccessibleConsoleWindow.cs
+Replaced local button and message-row rendering, position speech, diagnostics, and speech with shared utilities.
+line 51
+line 233
+
+consol/UnityAccess.AccessibleConsole.Editor.asmdef
+Referenced UnityAccess.Editor so the console consumes the common accessibility utilities.
+line 1
+line 11

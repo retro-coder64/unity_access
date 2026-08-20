@@ -18,8 +18,7 @@ namespace UnityAccess
         private GameObject inspectedObject;
         private Vector2 scrollPosition;
         private int selectedIndex;
-        private bool isEditing;
-        private string editValue = string.Empty;
+        private readonly AccessibleTextEdit textEdit = new AccessibleTextEdit();
         private readonly List<Type> componentTypes = new List<Type>();
         private bool isAddingComponent;
         private int selectedComponentTypeIndex;
@@ -115,19 +114,28 @@ namespace UnityAccess
                 Rect row = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
                 if (index == selectedIndex)
                 {
-                    EditorGUI.DrawRect(row, new Color(0.24f, 0.49f, 0.90f, 0.45f));
+                    AccessibleEditorStyles.DrawSelection(row, true);
                 }
 
                 InspectorItem item = items[index];
-                if (isEditing && index == selectedIndex && item.IsEditable)
+                if (textEdit.IsEditing && index == selectedIndex && item.IsEditable)
                 {
-                    GUI.SetNextControlName(EditControlName);
-                    editValue = EditorGUI.TextField(row, item.Label, editValue);
-                    EditorGUI.FocusTextInControl(EditControlName);
+                    textEdit.Value = AccessibleControls.TextBox(row, EditControlName, item.Label, textEdit.Value, true);
                 }
                 else
                 {
-                    EditorGUI.LabelField(row, item.Label + ": " + item.Value);
+                    string displayText = item.Label + ": " + item.Value;
+                    bool isButton = item.Kind == InspectorItemKind.Component ||
+                        item.Kind == InspectorItemKind.AddComponent;
+                    if (isButton && AccessibleControls.Button(row, displayText, index == selectedIndex))
+                    {
+                        selectedIndex = index;
+                        ActivateSelectedItem();
+                    }
+                    else if (!isButton)
+                    {
+                        EditorGUI.LabelField(row, displayText);
+                    }
                 }
             }
 
@@ -141,15 +149,13 @@ namespace UnityAccess
                 Rect row = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
                 if (index == selectedPropertyIndex)
                 {
-                    EditorGUI.DrawRect(row, new Color(0.24f, 0.49f, 0.90f, 0.45f));
+                    AccessibleEditorStyles.DrawSelection(row, true);
                 }
 
                 ComponentPropertyItem item = componentProperties[index];
-                if (isEditing && index == selectedPropertyIndex)
+                if (textEdit.IsEditing && index == selectedPropertyIndex)
                 {
-                    GUI.SetNextControlName(EditControlName);
-                    editValue = EditorGUI.TextField(row, item.Label, editValue);
-                    EditorGUI.FocusTextInControl(EditControlName);
+                    textEdit.Value = AccessibleControls.TextBox(row, EditControlName, item.Label, textEdit.Value, true);
                 }
                 else
                 {
@@ -168,7 +174,7 @@ namespace UnityAccess
                 Rect row = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
                 if (index == selectedComponentTypeIndex)
                 {
-                    EditorGUI.DrawRect(row, new Color(0.24f, 0.49f, 0.90f, 0.45f));
+                    AccessibleEditorStyles.DrawSelection(row, true);
                 }
 
                 EditorGUI.LabelField(row, GetComponentDisplayName(componentTypes[index]));
@@ -182,16 +188,16 @@ namespace UnityAccess
                 return;
             }
 
-            if (isEditing)
+            if (textEdit.IsEditing)
             {
-                if (currentEvent.keyCode == KeyCode.Return || currentEvent.keyCode == KeyCode.KeypadEnter)
+                if (AccessibleKeyboard.IsConfirm(currentEvent))
                 {
                     CommitEdit();
                     currentEvent.Use();
                 }
-                else if (currentEvent.keyCode == KeyCode.Escape)
+                else if (AccessibleKeyboard.IsCancel(currentEvent))
                 {
-                    isEditing = false;
+                    textEdit.End();
                     SpeakSafely("Edit cancelled. " + (inspectedComponent == null
                         ? GetSelectedItemDescription()
                         : GetSelectedPropertyDescription()));
@@ -338,8 +344,8 @@ namespace UnityAccess
                 return;
             }
 
-            selectedIndex = Mathf.Clamp(selectedIndex + direction, 0, items.Count - 1);
-            SpeakSafely(GetSelectedItemDescription() + ", " + (selectedIndex + 1) + " of " + items.Count + ".");
+            selectedIndex = AccessibleList.Move(selectedIndex, direction, items.Count);
+            SpeakSafely(GetSelectedItemDescription() + ", " + AccessibleList.Position(selectedIndex, items.Count) + ".");
             Repaint();
         }
 
@@ -369,8 +375,7 @@ namespace UnityAccess
                 return;
             }
 
-            editValue = item.Value;
-            isEditing = true;
+            textEdit.Begin(item.Value);
             string inputDescription = item.Kind == InspectorItemKind.Name ? "Type a name" : "Type a number";
             SpeakSafely("Editing " + item.Label + ". Current value " + item.Value + ". " + inputDescription + " and press Enter. Escape cancels.");
             Repaint();
@@ -392,7 +397,7 @@ namespace UnityAccess
             }
 
             float parsedValue;
-            if (!float.TryParse(editValue, NumberStyles.Float, CultureInfo.InvariantCulture, out parsedValue) ||
+            if (!float.TryParse(textEdit.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out parsedValue) ||
                 float.IsNaN(parsedValue) || float.IsInfinity(parsedValue))
             {
                 SpeakSafely("Invalid number. Use digits, a minus sign, and a decimal point.");
@@ -402,7 +407,7 @@ namespace UnityAccess
             Undo.RecordObject(inspectedObject.transform, "Unity Access edit " + item.Label);
             item.SetValue(parsedValue);
             EditorUtility.SetDirty(inspectedObject.transform);
-            isEditing = false;
+            textEdit.End();
             RefreshItems();
             SpeakSafely(item.Label + " changed to " + FormatFloat(parsedValue) + ".");
             Repaint();
@@ -410,7 +415,7 @@ namespace UnityAccess
 
         private void CommitNameEdit(InspectorItem item)
         {
-            string newName = editValue.Trim();
+            string newName = textEdit.Value.Trim();
             if (newName.Length == 0)
             {
                 SpeakSafely("The object name cannot be empty.");
@@ -420,7 +425,7 @@ namespace UnityAccess
             Undo.RecordObject(inspectedObject, "Unity Access rename object");
             inspectedObject.name = newName;
             EditorUtility.SetDirty(inspectedObject);
-            isEditing = false;
+            textEdit.End();
             RefreshItems();
             SpeakSafely(item.Label + " changed to " + newName + ".");
             Repaint();
@@ -435,7 +440,7 @@ namespace UnityAccess
 
             inspectedObject = selectedObject;
             selectedIndex = 0;
-            isEditing = false;
+            textEdit.End();
             isAddingComponent = false;
             RefreshItems();
             SpeakSafely("Inspector opened for " + inspectedObject.name + ". " + items.Count + " properties. " + GetSelectedItemDescription() + ".");
@@ -490,7 +495,7 @@ namespace UnityAccess
 
             inspectedComponent = component;
             selectedPropertyIndex = 0;
-            isEditing = false;
+            textEdit.End();
             isChoosingOption = false;
             RefreshComponentProperties();
             SpeakSafely(component.GetType().Name + " component. " + componentProperties.Count +
@@ -565,9 +570,9 @@ namespace UnityAccess
                 return;
             }
 
-            selectedPropertyIndex = Mathf.Clamp(selectedPropertyIndex + direction, 0, componentProperties.Count - 1);
-            SpeakSafely(GetSelectedPropertyDescription() + ", " + (selectedPropertyIndex + 1) +
-                " of " + componentProperties.Count + ".");
+            selectedPropertyIndex = AccessibleList.Move(selectedPropertyIndex, direction, componentProperties.Count);
+            SpeakSafely(GetSelectedPropertyDescription() + ", " +
+                AccessibleList.Position(selectedPropertyIndex, componentProperties.Count) + ".");
             Repaint();
         }
 
@@ -601,8 +606,7 @@ namespace UnityAccess
                 item.PropertyType == SerializedPropertyType.Vector2 ||
                 item.PropertyType == SerializedPropertyType.Vector3) && item.IsEditable)
             {
-                editValue = item.Value;
-                isEditing = true;
+                textEdit.Begin(item.Value);
                 SpeakSafely("Editing " + item.Label + ". Current value " + item.Value +
                     ". Type a number and press Enter. Escape cancels.");
                 Repaint();
@@ -611,8 +615,7 @@ namespace UnityAccess
 
             if (item.PropertyType == SerializedPropertyType.String && item.IsEditable)
             {
-                editValue = item.Value;
-                isEditing = true;
+                textEdit.Begin(item.Value);
                 SpeakSafely("Editing " + item.Label + ". Type text and press Enter. Escape cancels.");
                 Repaint();
                 return;
@@ -648,12 +651,12 @@ namespace UnityAccess
             if (property.propertyType == SerializedPropertyType.String)
             {
                 Undo.RecordObject(inspectedComponent, "Unity Access edit " + item.Label);
-                property.stringValue = editValue;
+                property.stringValue = textEdit.Value;
             }
             else if (item.VectorAxis >= 0)
             {
                 float axisValue;
-                if (!float.TryParse(editValue, NumberStyles.Float, CultureInfo.InvariantCulture, out axisValue) ||
+                if (!float.TryParse(textEdit.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out axisValue) ||
                     float.IsNaN(axisValue) || float.IsInfinity(axisValue))
                 {
                     SpeakSafely("Invalid number. Use digits, a minus sign, and a decimal point.");
@@ -677,7 +680,7 @@ namespace UnityAccess
             else if (property.propertyType == SerializedPropertyType.Integer)
             {
                 long integerValue;
-                if (!long.TryParse(editValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out integerValue))
+                if (!long.TryParse(textEdit.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out integerValue))
                 {
                     SpeakSafely("Invalid whole number.");
                     return;
@@ -689,7 +692,7 @@ namespace UnityAccess
             else
             {
                 double realValue;
-                if (!double.TryParse(editValue, NumberStyles.Float, CultureInfo.InvariantCulture, out realValue) ||
+                if (!double.TryParse(textEdit.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out realValue) ||
                     double.IsNaN(realValue) || double.IsInfinity(realValue))
                 {
                     SpeakSafely("Invalid number. Use digits, a minus sign, and a decimal point.");
@@ -766,7 +769,7 @@ namespace UnityAccess
         private void CommitTransformComponentEdit(ComponentPropertyItem item)
         {
             float parsedValue;
-            if (!float.TryParse(editValue, NumberStyles.Float, CultureInfo.InvariantCulture, out parsedValue) ||
+            if (!float.TryParse(textEdit.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out parsedValue) ||
                 float.IsNaN(parsedValue) || float.IsInfinity(parsedValue))
             {
                 SpeakSafely("Invalid number. Use digits, a minus sign, and a decimal point.");
@@ -796,7 +799,7 @@ namespace UnityAccess
             }
 
             EditorUtility.SetDirty(componentTransform);
-            isEditing = false;
+            textEdit.End();
             RefreshComponentProperties();
             SpeakSafely(item.Label + " changed to " + FormatFloat(parsedValue) + ".");
             Repaint();
@@ -821,9 +824,9 @@ namespace UnityAccess
         private void MoveOptionSelection(int direction)
         {
             ComponentPropertyItem item = componentProperties[selectedPropertyIndex];
-            selectedOptionIndex = Mathf.Clamp(selectedOptionIndex + direction, 0, item.Options.Length - 1);
-            SpeakSafely(item.Options[selectedOptionIndex] + ", " + (selectedOptionIndex + 1) +
-                " of " + item.Options.Length + ".");
+            selectedOptionIndex = AccessibleList.Move(selectedOptionIndex, direction, item.Options.Length);
+            SpeakSafely(item.Options[selectedOptionIndex] + ", " +
+                AccessibleList.Position(selectedOptionIndex, item.Options.Length) + ".");
             Repaint();
         }
 
@@ -848,7 +851,7 @@ namespace UnityAccess
         {
             serializedObject.ApplyModifiedProperties();
             EditorUtility.SetDirty(inspectedComponent);
-            isEditing = false;
+            textEdit.End();
             isChoosingOption = false;
             RefreshComponentProperties();
             SpeakSafely(label + " changed to " + componentProperties[selectedPropertyIndex].Value + ".");
@@ -857,7 +860,7 @@ namespace UnityAccess
 
         private void HandleMissingProperty()
         {
-            isEditing = false;
+            textEdit.End();
             isChoosingOption = false;
             RefreshComponentProperties();
             SpeakSafely("That property is no longer available. The component view was refreshed.");
@@ -938,8 +941,9 @@ namespace UnityAccess
                 return;
             }
 
-            selectedComponentTypeIndex = Mathf.Clamp(selectedComponentTypeIndex + direction, 0, componentTypes.Count - 1);
-            SpeakSafely(GetComponentDisplayName(componentTypes[selectedComponentTypeIndex]) + ", " + (selectedComponentTypeIndex + 1) + " of " + componentTypes.Count + ".");
+            selectedComponentTypeIndex = AccessibleList.Move(selectedComponentTypeIndex, direction, componentTypes.Count);
+            SpeakSafely(GetComponentDisplayName(componentTypes[selectedComponentTypeIndex]) + ", " +
+                AccessibleList.Position(selectedComponentTypeIndex, componentTypes.Count) + ".");
             Repaint();
         }
 
@@ -1013,14 +1017,7 @@ namespace UnityAccess
 
         private static void SpeakSafely(string message)
         {
-            try
-            {
-                NvdaApi.Speak(message);
-            }
-            catch (Exception exception)
-            {
-                PluginErrorLog.Write(nameof(InspectorAccessibilityWindow), exception);
-            }
+            AccessibleSpeech.Speak(message, nameof(InspectorAccessibilityWindow));
         }
 
         private sealed class ComponentPropertyItem

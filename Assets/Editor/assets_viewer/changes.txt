@@ -1,0 +1,16 @@
+AccessibleAssetsViewer.cs
+Added a keyboard-driven, NVDA-announced Unity Assets viewer with folder and asset columns, search, type reporting, rename, delete, move, menus, scrolling, icons, and a Unity Access menu command. All asset mutations use AssetDatabase so Unity metadata moves or deletes with each item.
+1
+617
+AccessibleAssetsViewer.cs
+Changed search from a current-folder substring filter into a project-wide closest-match search. Results now include folders and every asset type, rank exact/prefix/substring/fuzzy name matches, display and announce their containing paths, and remain keyboard navigable.
+14
+755
+AccessibleAssetsViewer.cs
+Updated the top search control to use AccessibleControls.TextBox with the exact label Search. Search now receives initial keyboard and NVDA focus, announces itself first, labels the results below it, and lets Enter or Down Arrow move directly into the results.
+67
+774
+AccessibleAssetsViewer.cs
+Changed Search from an automatically focused typing field into the selected top item in the window. NVDA now announces it through list navigation; Enter starts editing, Escape ends editing, Down Arrow enters results, and Up Arrow from the first folder or file returns to Search.
+26
+818
