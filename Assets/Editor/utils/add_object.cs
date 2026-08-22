@@ -20,23 +20,11 @@ namespace UnityAccess
         private readonly List<AddObjectEntry> entries = new List<AddObjectEntry>();
         private EditorWindow returnWindow;
         private GameObject parentObject;
-        private string parentName;
         private int selectedIndex = -1;
         private Vector2 scrollPosition;
 
-        /// <summary>Opens the window and optionally parents new objects below the named scene object.</summary>
-        public static void Open(string parent = null)
-        {
-            OpenInternal(parent, null);
-        }
-
         /// <summary>Opens the window and optionally parents new objects below the supplied scene object.</summary>
-        public static void Open(GameObject parent)
-        {
-            OpenInternal(null, parent);
-        }
-
-        private static void OpenInternal(string requestedParentName, GameObject requestedParent)
+        public static void Open(GameObject parent = null)
         {
             try
             {
@@ -45,10 +33,7 @@ namespace UnityAccess
                 window.titleContent = new GUIContent("Add Object");
                 window.minSize = new Vector2(320.0f, 220.0f);
                 window.returnWindow = previousWindow;
-                window.parentName = string.IsNullOrWhiteSpace(requestedParentName)
-                    ? null
-                    : requestedParentName.Trim();
-                window.parentObject = requestedParent;
+                window.parentObject = parent;
                 window.BuildEntries();
                 window.ShowAuxWindow();
                 window.Focus();
@@ -152,11 +137,6 @@ namespace UnityAccess
             }
 
             GameObject resolvedParent = ResolveParent();
-            if (parentName != null && resolvedParent == null)
-            {
-                ReportError("The parent object named " + parentName + " could not be found.");
-                return;
-            }
 
             UnityEngine.Object createdObject = PrefabUtility.InstantiatePrefab(asset);
             GameObject createdGameObject = createdObject as GameObject;
@@ -178,34 +158,7 @@ namespace UnityAccess
 
         private GameObject ResolveParent()
         {
-            if (parentObject != null)
-            {
-                return parentObject;
-            }
-
-            if (parentName == null)
-            {
-                return null;
-            }
-
-            GameObject activeMatch = GameObject.Find(parentName);
-            if (activeMatch != null)
-            {
-                return activeMatch;
-            }
-
-            // GameObject.Find excludes inactive objects, so inspect loaded scene objects as a fallback.
-            GameObject[] loadedObjects = Resources.FindObjectsOfTypeAll<GameObject>();
-            foreach (GameObject candidate in loadedObjects)
-            {
-                if (candidate.scene.IsValid() &&
-                    string.Equals(candidate.name, parentName, StringComparison.Ordinal))
-                {
-                    return candidate;
-                }
-            }
-
-            return null;
+            return parentObject;
         }
 
         private void DrawEntry(int index)

@@ -300,3 +300,28 @@ hierarchy/HierarchyAccessibilityWindow.cs
 Integrated Add object into the hierarchy cursor as a shared AccessibleControls button, allowing Up and Down navigation, Enter activation, selection highlighting, and explicit NVDA button announcements.
 line 16
 line 283
+
+utils/add_object.cs
+Changed AddObjectWindow.Open to accept a GameObject reference as its only parent API and removed name-based parent resolution.
+line 22
+line 161
+
+hierarchy/HierarchyAccessibilityWindow.cs
+Updated the hierarchy caller to use the object-reference API with no parent.
+line 146
+line 146
+
+utils/add_object.md
+Clarified that parenting uses the referenced parent object rather than an object name.
+line 55
+line 55
+
+hierarchy/HierarchyAccessibilityWindow.cs
+Added the Shift+F10 accessible object options menu with delete, duplicate, prefab creation, parent changes, unparenting, and child creation actions.
+line 20
+line 312
+
+utils/object_selector.cs
+Added a scene-GameObject-only selector entry point for hierarchy parent selection.
+line 61
+line 69

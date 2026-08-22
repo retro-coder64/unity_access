@@ -10,7 +10,7 @@ takes an atribute of parent
 
 if parent is nul then the object is added to the main seen tree
 
-if parent != nul then add the object as a child of the object that is named in the parent atribute.
+if parent != nul then add the object as a child of the object that is referenced  in the parent atribute.
 
 ### selecting objects
 
@@ -52,7 +52,7 @@ if the object is an asset
 
 use the prefab utility
 
-if parent is not nul parent the new object to the object that is named in the parent atribute
+if parent is not nul parent the new object to the object referenced by the parent atribute
 
 ## ui
 
@@ -65,3 +65,6 @@ pressing enter will instantiate these objects and handle parenting automatically
 for now there will be no search box for the user to use.
 
 pressing escape will return them to the previously opened window
+
+## referencing
+the add object takes a atribute of parent which is an object reference 

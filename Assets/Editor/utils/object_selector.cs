@@ -58,6 +58,14 @@ namespace UnityAccess
             OpenInternal(objectType, onSelected, currentValue, scope);
         }
 
+        /// <summary>Opens a selector containing only loaded scene GameObjects.</summary>
+        public static void OpenSceneGameObject(
+            UnityEngine.Object currentValue,
+            Action<UnityEngine.Object> onSelected)
+        {
+            OpenInternal(typeof(GameObject), onSelected, currentValue, ObjectReferenceScope.SceneObjects);
+        }
+
         /// <summary>
         /// Internal implementation used after the public Open method has derived the valid
         /// reference scope from the object that owns the field.

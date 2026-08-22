@@ -17,6 +17,13 @@ namespace UnityAccess
         private readonly List<GameObject> sceneObjects = new List<GameObject>();
         private Vector2 scrollPosition;
         private int selectedIndex = AddObjectControlIndex;
+        private bool showingOptions;
+        private GameObject optionsObject;
+        private int selectedOptionIndex;
+        private static readonly string[] Options =
+        {
+            "Delete", "Duplicate", "Create Prefab", "Set Parent", "Unparent", "Add Child"
+        };
 
         /// <summary>
         /// Opens the accessible hierarchy. The underscore makes H a Unity menu shortcut.
@@ -64,6 +71,11 @@ namespace UnityAccess
             try
             {
                 HandleKeyboardInput(Event.current);
+                if (showingOptions)
+                {
+                    DrawOptionsMenu();
+                    return;
+                }
                 EditorGUILayout.LabelField("Scene objects", EditorStyles.boldLabel);
                 EditorGUILayout.LabelField("Use Up and Down to navigate. Enter selects; Backspace removes; A adds an object.");
 
@@ -106,9 +118,20 @@ namespace UnityAccess
                 return;
             }
 
+            if (showingOptions)
+            {
+                HandleOptionsKeyboard(currentEvent);
+                return;
+            }
+
             if (currentEvent.keyCode == KeyCode.UpArrow)
             {
                 MoveSelection(-1);
+                currentEvent.Use();
+            }
+            else if (currentEvent.shift && currentEvent.keyCode == KeyCode.F10)
+            {
+                OpenOptionsMenu();
                 currentEvent.Use();
             }
             else if (currentEvent.keyCode == KeyCode.DownArrow)
@@ -138,12 +161,166 @@ namespace UnityAccess
             }
         }
 
+        private void OpenOptionsMenu()
+        {
+            if (selectedIndex < 0 || selectedIndex >= sceneObjects.Count || sceneObjects[selectedIndex] == null)
+            {
+                SpeakSafely("Select a scene object before opening its options.");
+                return;
+            }
+
+            optionsObject = sceneObjects[selectedIndex];
+            selectedOptionIndex = 0;
+            showingOptions = true;
+            SpeakSafely(optionsObject.name + " options. " + Options[0] + ", 1 of " + Options.Length + ".");
+            Repaint();
+        }
+
+        private void DrawOptionsMenu()
+        {
+            EditorGUILayout.LabelField("Options for " + optionsObject.name, EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Up and Down navigate. Enter activates. Escape returns.");
+            for (int index = 0; index < Options.Length; index++)
+            {
+                if (AccessibleControls.Button(Options[index], index == selectedOptionIndex))
+                {
+                    selectedOptionIndex = index;
+                    ActivateOption();
+                    return;
+                }
+            }
+        }
+
+        private void HandleOptionsKeyboard(Event currentEvent)
+        {
+            if (currentEvent.keyCode == KeyCode.UpArrow || currentEvent.keyCode == KeyCode.DownArrow)
+            {
+                int direction = currentEvent.keyCode == KeyCode.UpArrow ? -1 : 1;
+                selectedOptionIndex = (selectedOptionIndex + direction + Options.Length) % Options.Length;
+                SpeakSafely(Options[selectedOptionIndex] + ", " + (selectedOptionIndex + 1) + " of " + Options.Length + ".");
+                Repaint();
+            }
+            else if (currentEvent.keyCode == KeyCode.Return || currentEvent.keyCode == KeyCode.KeypadEnter)
+            {
+                ActivateOption();
+            }
+            else if (currentEvent.keyCode == KeyCode.Escape)
+            {
+                showingOptions = false;
+                optionsObject = null;
+                SpeakSafely("Options closed.");
+                Repaint();
+            }
+            else
+            {
+                return;
+            }
+
+            currentEvent.Use();
+        }
+
+        private void ActivateOption()
+        {
+            GameObject target = optionsObject;
+            if (target == null)
+            {
+                CloseOptions("The selected object no longer exists.");
+                return;
+            }
+
+            switch (selectedOptionIndex)
+            {
+                case 0: DeleteObject(target); break;
+                case 1: DuplicateObject(target); break;
+                case 2: CreatePrefab(target); break;
+                case 3: SetParent(target); break;
+                case 4: UnparentObject(target); break;
+                case 5: AddChild(target); break;
+            }
+        }
+
+        private void DeleteObject(GameObject target)
+        {
+            if (EditorUtility.DisplayDialog("Delete object", "Delete " + target.name + "?", "Delete", "Cancel"))
+            {
+                Undo.DestroyObjectImmediate(target);
+                CloseOptions(target.name + " deleted.");
+            }
+            else
+            {
+                SpeakSafely("Delete cancelled. Options menu.");
+            }
+        }
+
+        private void DuplicateObject(GameObject target)
+        {
+            GameObject copy = Instantiate(target, target.transform.parent);
+            copy.name = target.name + " Copy";
+            Undo.RegisterCreatedObjectUndo(copy, "Duplicate " + target.name);
+            Selection.activeGameObject = copy;
+            RefreshHierarchy(false);
+            CloseOptions(copy.name + " duplicated.");
+        }
+
+        private void CreatePrefab(GameObject target)
+        {
+            string path = EditorUtility.SaveFilePanelInProject("Create Prefab", target.name, "prefab", "Choose a prefab location.");
+            if (!string.IsNullOrEmpty(path))
+            {
+                PrefabUtility.SaveAsPrefabAsset(target, path);
+                CloseOptions("Prefab created for " + target.name + ".");
+            }
+        }
+
+        private void SetParent(GameObject target)
+        {
+            ObjectSelector.OpenSceneGameObject(target, selected =>
+            {
+                if (selected == null || selected == target || ((GameObject)selected).transform.IsChildOf(target.transform))
+                {
+                    SpeakSafely("Invalid parent. Choose another scene object.");
+                    return;
+                }
+
+                Undo.SetTransformParent(target.transform, ((GameObject)selected).transform, "Set Parent");
+                CloseOptions(target.name + " parent set to " + selected.name + ".");
+            });
+        }
+
+        private void UnparentObject(GameObject target)
+        {
+            if (target.transform.parent != null)
+            {
+                Undo.SetTransformParent(target.transform, null, "Unparent");
+                CloseOptions(target.name + " unparented.");
+            }
+            else
+            {
+                CloseOptions(target.name + " is already a root object.");
+            }
+        }
+
+        private void AddChild(GameObject target)
+        {
+            showingOptions = false;
+            AddObjectWindow.Open(target);
+        }
+
+        private void CloseOptions(string message)
+        {
+            showingOptions = false;
+            optionsObject = null;
+            RefreshHierarchy(false);
+            SpeakSafely(message);
+            Repaint();
+        }
+
         /// <summary>
         /// Opens the shared Add Object utility with no parent, as required for hierarchy creation.
         /// </summary>
         private static void OpenAddObjectWindow()
         {
-            AddObjectWindow.Open((GameObject)null);
+            AddObjectWindow.Open();
         }
 
         private void MoveSelection(int direction)

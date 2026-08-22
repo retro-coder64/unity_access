@@ -29,3 +29,8 @@ the hierarchy view will pass the data that is to be spoken allowed to the script
 the programme will opperate on an observer pattern 
 the hierarchy will update a shared selection variable which the inspector will watch for 
 the hierarchy does not call the inspector explicitly 
+
+
+## object options menu 
+build an menu for the options of each object using object_options_menu.md 
+ensure that it meets the accessibility standards of the project 
