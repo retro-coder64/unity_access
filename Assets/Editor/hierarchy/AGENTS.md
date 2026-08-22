@@ -6,6 +6,10 @@ the hierarchy view shows all objects in the seen
 it does not edit any objects
 the user can use the up and down arrow keys to navigate through the list of objects 
 the hierarchy will expose the name of the object that the user is on to the NVDA helper scripts. 
+## adding objects 
+the hierarchy will have a button labeled add object 
+when the button is pressed the add object utility will be called 
+the parent atribute will be nul 
 ##startup 
 the hierarchy view will activate when the user presses h 
 it will also start when the user starts the unity_access plugin. 

@@ -27,6 +27,7 @@ the inspector will allow the user to edit the following properties
 - - x scale 
 - - y scale 
 - - z scale 
+- any other fields the inspector locates on an object 
 - component properties [properties.md]component.md)
 the user can also remove components by navigating to the component and pressing backspace. 
 
@@ -38,3 +39,21 @@ they can navigate the list using the arrow keys and select a component using ent
 the user must be able to use Nvda to navigate the inspector. 
 
 the user should be able to exit the inspector, and return to the hierarchy, by pressing the escape key
+
+## editing object fields 
+use the following system to decide the type of edit that can be made 
+ensure you use the accessible controls in the utils folder 
+### representing property types 
+bool value: check box / toggle 
+int value: editable field 
+float value: editable field 
+string value: editable field 
+enum: list/combo box 
+vector2: 
+number edit field x 
+number edit field y 
+vector3: 
+number edit field x
+number edit field y
+number edit field z 
+object reference: use the object selector script located @ (./utils/object_selector.cs)

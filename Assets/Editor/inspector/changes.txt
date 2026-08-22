@@ -1,0 +1,14 @@
+InspectorAccessibilityWindow.cs
+Added explicit Object properties and Components sections so object fields are presented before component navigation.
+112
+153
+
+InspectorAccessibilityWindow.cs
+Rendered boolean, enum, and object-reference fields as accessible controls and included their control types in NVDA announcements.
+156
+215
+
+InspectorAccessibilityWindow.cs
+Added field control types to selected-property descriptions for NVDA navigation.
+936
+953

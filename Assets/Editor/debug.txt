@@ -49,3 +49,11 @@ Your script should either check if it is null or you should not destroy the obje
   at UnityAccess.InspectorAccessibilityWindow.ApplyObjectReference (System.String propertyPath, System.String label, UnityEngine.Object selectedObject) [0x00050] in C:\Users\Daniel\Python\unity_access\Assets\Editor\inspector\InspectorAccessibilityWindow.cs:759 
   at UnityAccess.InspectorAccessibilityWindow+<>c__DisplayClass38_0.<OpenObjectReferenceSelector>b__0 (UnityEngine.Object selectedObject) [0x00000] in C:\Users\Daniel\Python\unity_access\Assets\Editor\inspector\InspectorAccessibilityWindow.cs:720 
   at UnityAccess.ObjectSelector.CommitSelection () [0x0004a] in C:\Users\Daniel\Python\unity_access\Assets\Editor\utils\object_selector.cs:143 
+SceneCreationShortcut.cs
+System.InvalidOperationException: Cannot rebind shortcut on read-only profile
+  at UnityEditor.ShortcutManagement.ShortcutManagerImplementation.RebindShortcut (System.String shortcutId, UnityEditor.ShortcutManagement.ShortcutBinding binding) [0x00087] in <4a6210677a0042ea8ce1fd85759d4494>:0 
+  at UnityAccess.SceneCreationShortcut.Configure () [0x0003a] in C:\Users\Daniel\Python\unity_access\Assets\Editor\utils\SceneCreationShortcut.cs:40 
+SceneCreationShortcut.cs
+System.InvalidOperationException: Cannot rebind shortcut on read-only profile
+  at UnityEditor.ShortcutManagement.ShortcutManagerImplementation.RebindShortcut (System.String shortcutId, UnityEditor.ShortcutManagement.ShortcutBinding binding) [0x00087] in <4a6210677a0042ea8ce1fd85759d4494>:0 
+  at UnityAccess.SceneCreationShortcut.Configure () [0x0003a] in C:\Users\Daniel\Python\unity_access\Assets\Editor\utils\SceneCreationShortcut.cs:40 

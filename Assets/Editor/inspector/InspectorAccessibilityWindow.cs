@@ -109,15 +109,26 @@ namespace UnityAccess
                 return;
             }
 
+            // Object properties are intentionally presented before component navigation.
+            EditorGUILayout.LabelField("Object properties", EditorStyles.boldLabel);
+            bool componentHeadingDrawn = false;
             for (int index = 0; index < items.Count; index++)
             {
+                InspectorItem item = items[index];
+                if (!componentHeadingDrawn &&
+                    (item.Kind == InspectorItemKind.Component || item.Kind == InspectorItemKind.AddComponent))
+                {
+                    EditorGUILayout.Space();
+                    EditorGUILayout.LabelField("Components", EditorStyles.boldLabel);
+                    componentHeadingDrawn = true;
+                }
+
                 Rect row = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
                 if (index == selectedIndex)
                 {
                     AccessibleEditorStyles.DrawSelection(row, true);
                 }
 
-                InspectorItem item = items[index];
                 if (textEdit.IsEditing && index == selectedIndex && item.IsEditable)
                 {
                     textEdit.Value = AccessibleControls.TextBox(row, EditControlName, item.Label, textEdit.Value, true);
@@ -162,9 +173,42 @@ namespace UnityAccess
                     string value = isChoosingOption && index == selectedPropertyIndex
                         ? item.Options[selectedOptionIndex]
                         : item.Value;
-                    EditorGUI.LabelField(row, item.Label + ": " + value);
+                    string displayText = GetPropertyControlText(item, value);
+                    bool isInteractiveControl = item.IsEditable &&
+                        (item.PropertyType == SerializedPropertyType.Boolean ||
+                        item.PropertyType == SerializedPropertyType.Enum ||
+                        item.PropertyType == SerializedPropertyType.ObjectReference);
+                    if (isInteractiveControl && AccessibleControls.Button(row, displayText, index == selectedPropertyIndex))
+                    {
+                        selectedPropertyIndex = index;
+                        ActivateSelectedProperty();
+                    }
+                    else if (!isInteractiveControl)
+                    {
+                        EditorGUI.LabelField(row, displayText);
+                    }
                 }
             }
+        }
+
+        private static string GetPropertyControlText(ComponentPropertyItem item, string value)
+        {
+            if (item.PropertyType == SerializedPropertyType.Boolean)
+            {
+                return item.Label + ": " + value + ", check box";
+            }
+
+            if (item.PropertyType == SerializedPropertyType.Enum)
+            {
+                return item.Label + ": " + value + ", combo box";
+            }
+
+            if (item.PropertyType == SerializedPropertyType.ObjectReference)
+            {
+                return item.Label + ": " + value + ", object selector";
+            }
+
+            return item.Label + ": " + value;
         }
 
         private void DrawComponentList()
@@ -522,10 +566,19 @@ namespace UnityAccess
             SerializedObject serializedObject = new SerializedObject(inspectedComponent);
             serializedObject.UpdateIfRequiredOrScript();
             SerializedProperty iterator = serializedObject.GetIterator();
-            bool visitChildren = true;
-            while (iterator.NextVisible(visitChildren))
+            bool enterChildren = true;
+            while (iterator.NextVisible(enterChildren))
             {
-                visitChildren = false;
+                // Descend through serialized containers so fields in nested serializable
+                // objects are detected. Supported values are leaves in this view.
+                enterChildren = !IsSupportedComponentProperty(iterator) && iterator.hasVisibleChildren;
+
+                // m_Script is Unity metadata rather than an editable object variable.
+                if (iterator.propertyPath == "m_Script")
+                {
+                    continue;
+                }
+
                 if (iterator.propertyType == SerializedPropertyType.Vector2)
                 {
                     componentProperties.Add(ComponentPropertyItem.FromVectorProperty(iterator, 0));
@@ -537,13 +590,26 @@ namespace UnityAccess
                     componentProperties.Add(ComponentPropertyItem.FromVectorProperty(iterator, 1));
                     componentProperties.Add(ComponentPropertyItem.FromVectorProperty(iterator, 2));
                 }
-                else
+                else if (IsSupportedComponentProperty(iterator))
                 {
                     componentProperties.Add(ComponentPropertyItem.FromProperty(iterator));
                 }
             }
 
             selectedPropertyIndex = Mathf.Clamp(selectedPropertyIndex, 0, Math.Max(0, componentProperties.Count - 1));
+        }
+
+        // component.md defines the serialized field types exposed by the accessible view.
+        private static bool IsSupportedComponentProperty(SerializedProperty property)
+        {
+            return property.propertyType == SerializedPropertyType.Boolean ||
+                property.propertyType == SerializedPropertyType.Integer ||
+                property.propertyType == SerializedPropertyType.Float ||
+                property.propertyType == SerializedPropertyType.String ||
+                property.propertyType == SerializedPropertyType.Vector2 ||
+                property.propertyType == SerializedPropertyType.Vector3 ||
+                property.propertyType == SerializedPropertyType.Enum ||
+                property.propertyType == SerializedPropertyType.ObjectReference;
         }
 
         private void AddTransformComponentProperties(Transform componentTransform)
@@ -875,7 +941,15 @@ namespace UnityAccess
             }
 
             ComponentPropertyItem item = componentProperties[selectedPropertyIndex];
-            return item.Label + ", " + item.Value + (item.IsEditable ? ", editable" : ", read only");
+            string controlType = item.PropertyType == SerializedPropertyType.Boolean
+                ? ", check box"
+                : item.PropertyType == SerializedPropertyType.Enum
+                    ? ", combo box"
+                    : item.PropertyType == SerializedPropertyType.ObjectReference
+                        ? ", object selector"
+                        : ", editable field";
+            return item.Label + ", " + item.Value +
+                (item.IsEditable ? controlType + ", editable" : ", read only");
         }
 
         private void RemoveSelectedComponent()

@@ -282,3 +282,21 @@ consol/UnityAccess.AccessibleConsole.Editor.asmdef
 Referenced UnityAccess.Editor so the console consumes the common accessibility utilities.
 line 1
 line 11
+add_object.cs
+Added an NVDA-accessible Add Object window that discovers deduplicated model and prefab GameObject assets, supports keyboard and mouse selection, instantiates with PrefabUtility and Undo, optionally parents by name or GameObject, reports errors, and restores prior window focus.
+1
+331
+add_object.cs.meta
+Added Unity metadata for the Add Object utility script.
+1
+2
+
+hierarchy/HierarchyAccessibilityWindow.cs
+Added an accessible Add object control and A keyboard shortcut that open the shared Add Object utility with a null parent, including updated on-screen and NVDA guidance.
+line 67
+line 143
+
+hierarchy/HierarchyAccessibilityWindow.cs
+Integrated Add object into the hierarchy cursor as a shared AccessibleControls button, allowing Up and Down navigation, Enter activation, selection highlighting, and explicit NVDA button announcements.
+line 16
+line 283

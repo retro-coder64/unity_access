@@ -13,9 +13,10 @@ namespace UnityAccess
     {
         private const string WindowTitle = "Accessible Hierarchy";
         private const string EmptyHierarchyMessage = "The hierarchy contains no scene objects.";
+        private const int AddObjectControlIndex = -1;
         private readonly List<GameObject> sceneObjects = new List<GameObject>();
         private Vector2 scrollPosition;
-        private int selectedIndex = -1;
+        private int selectedIndex = AddObjectControlIndex;
 
         /// <summary>
         /// Opens the accessible hierarchy. The underscore makes H a Unity menu shortcut.
@@ -64,7 +65,17 @@ namespace UnityAccess
             {
                 HandleKeyboardInput(Event.current);
                 EditorGUILayout.LabelField("Scene objects", EditorStyles.boldLabel);
-                EditorGUILayout.LabelField("Use Up and Down to navigate. Enter selects; Backspace removes an object.");
+                EditorGUILayout.LabelField("Use Up and Down to navigate. Enter selects; Backspace removes; A adds an object.");
+
+                // Keep object creation available to mouse users while the A shortcut provides
+                // a dependable, NVDA-friendly way to activate the same control.
+                if (AccessibleControls.Button(
+                    "Add object, button. Press Enter.",
+                    selectedIndex == AddObjectControlIndex))
+                {
+                    selectedIndex = AddObjectControlIndex;
+                    OpenAddObjectWindow();
+                }
 
                 scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
                 for (int index = 0; index < sceneObjects.Count; index++)
@@ -107,7 +118,7 @@ namespace UnityAccess
             }
             else if (currentEvent.keyCode == KeyCode.Return || currentEvent.keyCode == KeyCode.KeypadEnter)
             {
-                OpenSelectedObject();
+                ActivateSelection();
                 currentEvent.Use();
             }
             else if (currentEvent.keyCode == KeyCode.Backspace)
@@ -120,17 +131,41 @@ namespace UnityAccess
                 RefreshHierarchy(true);
                 currentEvent.Use();
             }
+            else if (currentEvent.keyCode == KeyCode.A)
+            {
+                OpenAddObjectWindow();
+                currentEvent.Use();
+            }
+        }
+
+        /// <summary>
+        /// Opens the shared Add Object utility with no parent, as required for hierarchy creation.
+        /// </summary>
+        private static void OpenAddObjectWindow()
+        {
+            AddObjectWindow.Open((GameObject)null);
         }
 
         private void MoveSelection(int direction)
         {
             if (sceneObjects.Count == 0)
             {
-                SpeakSafely(EmptyHierarchyMessage);
+                selectedIndex = AddObjectControlIndex;
+                SpeakSafely("Add object, button. Press Enter. " + EmptyHierarchyMessage);
                 return;
             }
 
-            selectedIndex = AccessibleList.Move(selectedIndex, direction, sceneObjects.Count);
+            selectedIndex = Mathf.Clamp(
+                selectedIndex + direction,
+                AddObjectControlIndex,
+                sceneObjects.Count - 1);
+            if (selectedIndex == AddObjectControlIndex)
+            {
+                SpeakSafely("Add object, button. Press Enter.");
+                Repaint();
+                return;
+            }
+
             GameObject selectedObject = sceneObjects[selectedIndex];
             if (selectedObject == null)
             {
@@ -144,6 +179,17 @@ namespace UnityAccess
             SpeakSafely(GetSpokenName(selectedObject) + ", " +
                 AccessibleList.Position(selectedIndex, sceneObjects.Count) + ".");
             Repaint();
+        }
+
+        private void ActivateSelection()
+        {
+            if (selectedIndex == AddObjectControlIndex)
+            {
+                OpenAddObjectWindow();
+                return;
+            }
+
+            OpenSelectedObject();
         }
 
         private void OpenSelectedObject()
@@ -222,7 +268,7 @@ namespace UnityAccess
             }
 
             selectedIndex = FindObjectIndex(selectedInstanceId);
-            if (selectedIndex < 0 && sceneObjects.Count > 0)
+            if (selectedIndex < 0 && sceneObjects.Count > 0 && previousIndex != AddObjectControlIndex)
             {
                 selectedIndex = Mathf.Clamp(previousIndex, 0, sceneObjects.Count - 1);
             }
@@ -230,8 +276,10 @@ namespace UnityAccess
             if (announce)
             {
                 string message = sceneObjects.Count == 0
-                    ? EmptyHierarchyMessage
-                    : "Hierarchy opened. " + sceneObjects.Count + " scene objects. " + GetSpokenName(sceneObjects[selectedIndex]) + ", " + (selectedIndex + 1) + " of " + sceneObjects.Count + ".";
+                    ? "Hierarchy opened. Add object, button. Press Enter. " + EmptyHierarchyMessage
+                    : selectedIndex == AddObjectControlIndex
+                        ? "Hierarchy opened. " + sceneObjects.Count + " scene objects. Add object, button. Press Enter."
+                        : "Hierarchy opened. " + sceneObjects.Count + " scene objects. " + GetSpokenName(sceneObjects[selectedIndex]) + ", " + (selectedIndex + 1) + " of " + sceneObjects.Count + ".";
                 SpeakSafely(message);
             }
         }
