@@ -1,0 +1,49 @@
+material_window.cs
+Restored Unity MaterialProperty APIs and added default-shader validation to prevent compilation and initialization failures.
+1
+150
+
+material_window.cs
+Moved the material window menu command into the Unity Access menu.
+19
+19
+
+material_window.cs
+Added an explicit Create Material command to the Unity Access menu.
+30
+34
+
+material_window.cs
+Recreated the material editor around existing-material selection, public Shader and Material APIs, accessible controls, keyboard escape handling, and removed the Create Material menu command.
+1
+193
+
+material_window.cs
+Restored the in-window Create material and Edit material top-level choices, including the project save dialog and deferred asset creation after shader selection.
+15
+218
+
+material_window.cs
+Added explicit keyboard navigation and NVDA announcements for the in-window top-level Create material and Edit material buttons.
+18
+153
+
+material_window.cs
+Delayed the opening announcement until after Unity transfers focus so NVDA reads the material window state reliably.
+17
+27
+
+material_window.cs
+Added complete editor-state speech, verified created assets, imported and selected new materials, and confirmed the editor remains open after creation.
+17
+298
+
+material_window.cs
+Rebuilt the complete material workflow with explicit keyboard and NVDA navigation, accessible text editing, public Shader property discovery, validated create/edit/save behavior, range enforcement, RGB alpha preservation, and asset-only texture selection.
+1
+618
+
+material_window.cs
+Fixed create mode failing to appear after the modal project save dialog by deferring the state transition, focus, repaint, and NVDA announcement until Unity's next editor tick.
+21
+157
