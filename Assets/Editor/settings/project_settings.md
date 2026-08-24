@@ -2,98 +2,202 @@
 
 ## overview
 
-this file describes the accessible project settings window.
+this file describes the first phase of the accessible Project Settings window.
 
-the window allows the user to view and change supported Unity project settings without relying on the standard inaccessible Project Settings window.
+this phase only contains the project settings needed for normal early game development.
 
-this window only covers project settings. editor preferences, build profiles and other Unity Access tools are outside this file.
+do not add other Project Settings categories unless they are added to the scope later.
+
+## unity version
+
+target Unity 6.3 LTS.
+
+verify Unity behaviour and APIs against the Unity 6.3 manual before implementing a setting.
 
 ## accessibility requirements
 
 - use the accessible controls located in ./utils
 - the entire window must be useable with NVDA and the keyboard
-- every control must have an accessible name and expose its current value or state
-- focus changes and important state changes must be available to NVDA
-- do not require the user to identify controls by colour, icons, position or tooltips
+- every control must have an accessible name
+- every control must expose its current value or state to NVDA
 - use a predictable tab order
-- do not use the standard Unity Project Settings window as the accessible interface
+- use arrow keys for lists
+- use enter to activate the selected item
+- do not require the user to identify controls by colour, icons, position or tooltips
+- when a control is disabled, NVDA must be able to identify that it is disabled
+- do not open the standard Unity Project Settings window as a replacement for the accessible interface
 
-## window layout
+## categories
 
-the window has two main areas:
+this phase contains:
 
-- settings categories
-- settings for the selected category
+- Player
+- Tags and Layers
 
-when the window opens, focus the settings categories list.
+when the window opens, show these categories in an accessible list.
 
-use up and down arrow keys to move through categories.
+press enter on a category to open its settings.
 
-press enter to open the selected category.
+## player
 
-use tab and shift tab to move through the controls for that category.
+Player Settings control how Unity builds and displays the final application.
 
-## project settings backend
+this phase is targeted at Windows standalone development.
 
-use supported public Unity Editor APIs to read and change project settings.
+use the public PlayerSettings API wherever Unity provides the required setting.
 
-each supported settings category should have its own adapter that maps the Unity setting to the accessible controls.
+### general settings
 
-do not:
+provide:
 
-- use Unity internal APIs
-- use reflection to access internal project settings
-- directly edit files in the ProjectSettings folder
-- parse or modify Unity project settings YAML files
+- Company Name
+- Product Name
+- Version
+- Default Icon
 
-only show a settings category when Unity Access has a supported adapter for it.
+use the object selector located in ./utils when selecting the Default Icon.
 
-do not attempt to automatically reproduce every settings provider in Unity.
+Default Cursor and Cursor Hotspot are outside the current scope.
 
-## reading settings
+### windows settings
 
-when a category is opened:
+provide an accessible Windows settings section.
 
-- read the current values from Unity
-- populate the accessible controls with those values
-- preserve the Unity value type, valid range and available choices
+### resolution and presentation
 
-refresh the values when the category is reopened.
+provide the settings needed to control the initial game window:
 
-do not replace a value while the user is currently editing that control.
+- Run In Background
+- Fullscreen Mode
+- Default Is Native Resolution
+- Default Screen Width
+- Default Screen Height
+- Resizable Window
+
+only show settings when Unity considers them valid for the selected Fullscreen Mode.
+
+for example, Default Screen Width and Default Screen Height are relevant when the game is Windowed.
+
+when changing Fullscreen Mode, refresh dependent controls without unexpectedly moving keyboard focus.
+
+### other player settings
+
+the remaining Windows Player Settings are outside this phase.
+
+use Unity defaults for settings that are not exposed by this window.
+
+do not implement Rendering, Vulkan, D3D12, Configuration, Shader, Optimization, Stack Trace or other advanced Player Settings until they are added to the scope.
+
+## tags and layers
+
+provide an accessible replacement for Project Settings > Tags and Layers.
+
+this section contains:
+
+- Tags
+- Sorting Layers
+- Layers
+
+### tags
+
+show all existing tags in an accessible list.
+
+allow the user to:
+
+- add a tag
+- remove a custom tag
+
+Unity does not allow an existing tag to be renamed.
+
+do not provide a rename action for tags.
+
+show a confirmation before removing a tag.
+
+### sorting layers
+
+show all Sorting Layers in an accessible list.
+
+allow the user to:
+
+- add a Sorting Layer
+- rename a Sorting Layer where Unity permits it
+- remove a Sorting Layer where Unity permits it
+- move a Sorting Layer up
+- move a Sorting Layer down
+
+do not rely on drag and drop for reordering.
+
+### layers
+
+show all Unity layers.
+
+Unity has 32 layer slots.
+
+preserve Unity's built-in layers.
+
+allow the user to name and edit the user layer slots that Unity permits.
+
+do not allow protected built-in layer names to be modified.
+
+the Layer property on an individual GameObject belongs in the Unity Access Inspector.
+
+do not put layers into the hierarchy tree.
 
 ## changing settings
 
-when the user changes a setting:
+validate a value before applying it.
 
-- validate the value before applying it
-- use the public Unity API responsible for that setting
-- keep the previous value if Unity rejects the change
-- report an error through the accessible UI if the value cannot be applied
+after a successful change:
 
-for settings represented by Unity objects, use the object selector located in ./utils where appropriate.
+- update the accessible control
+- ensure Unity records the project setting change
+- refresh any dependent controls
 
-do not silently change related settings unless Unity itself requires the change.
+if Unity rejects a value:
 
-## controls
+- keep the previous valid value
+- report the error through the accessible UI
 
-map Unity settings to the matching accessible control type.
+do not directly edit ProjectSettings YAML files when Unity provides a supported editor API.
 
-examples:
+do not invent Unity API methods.
 
-- bool = checkbox
-- enum = combo box
-- string = text field
-- int or float = numeric field
-- object reference = object selector
-- list = accessible list with appropriate add, remove and reorder controls
+if a setting does not have a documented public editing API, keep any Unity-version-specific implementation isolated from the accessible UI and verify it specifically against Unity 6.3 before use.
 
-use the existing accessible controls in ./utils rather than creating duplicate control implementations.
+## outside current scope
 
-## unsupported settings
+do not implement these Project Settings in this phase:
 
-if a project setting does not have a supported public API or a Unity Access adapter, do not expose an editable control for it.
+- Audio
+- Editor
+- Graphics
+- Input Manager
+- Package Manager
+- Physics
+- Physics 2D
+- Preset Manager
+- Quality
+- Scene Template
+- Script Execution Order
+- Services
+- Time
+- UI Toolkit
+- Version Control
+- full Windows Player Settings
+- non-Windows Player Settings
 
-do not fall back to undocumented Unity APIs simply to make the setting available.
+Physics layer collision rules will be added later when the accessible Physics settings are implemented.
 
-support for additional project settings can be added later by adding another adapter without changing the main window.
+## unity manual references
+
+Player:
+https://docs.unity3d.com/6000.3/Documentation/Manual/class-PlayerSettings.html
+
+Windows Player settings:
+https://docs.unity3d.com/6000.3/Documentation/Manual/playersettings-windows.html
+
+Tags and Layers:
+https://docs.unity3d.com/6000.3/Documentation/Manual/class-TagManager.html
+
+PlayerSettings API:
+https://docs.unity3d.com/6000.3/Documentation/ScriptReference/PlayerSettings.html

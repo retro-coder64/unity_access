@@ -325,3 +325,23 @@ utils/object_selector.cs
 Added a scene-GameObject-only selector entry point for hierarchy parent selection.
 line 61
 line 69
+
+settings/ProjectSettingsAccessibilityWindow.cs
+Rebuilt Project Settings to match project_settings.md: accessible Player and Tags and Layers categories, conditional Windows presentation controls, icon selection, validation, keyboard navigation, and NVDA state announcements.
+line 1
+line 625
+
+settings/ProjectSettingsTagManager.cs
+Added the isolated Unity 6.3 TagManager adapter for adding and removing tags, managing sorting layers without drag and drop, and editing only permitted user layer slots.
+line 1
+line 254
+
+settings/BuildProfilesAccessibilityWindow.cs
+Rebuilt Build Profiles to match build_profiles.md: Windows platform-profile activation, support detection, global Scene List management, architecture, development and compression settings, clean builds, builds, Build and Run, read-only custom-profile discovery, and NVDA result announcements.
+line 1
+line 618
+
+tests.txt
+Recorded Unity 6.3 compilation validation and the required NVDA keyboard validation for the rebuilt Project Settings and Build Profiles windows.
+line 2
+line 2

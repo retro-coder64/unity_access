@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using UnityEditor;
+using UnityEditorInternal;
 using UnityEngine;
 
 namespace UnityAccess
@@ -27,6 +28,9 @@ namespace UnityAccess
         private int selectedPropertyIndex;
         private bool isChoosingOption;
         private int selectedOptionIndex;
+        private readonly List<string> layerNames = new List<string>();
+        private bool isChoosingLayer;
+        private int selectedLayerIndex;
 
         /// <summary>
         /// Opens the inspector for the current shared or Unity selection.
@@ -89,12 +93,21 @@ namespace UnityAccess
             }
 
             EditorGUILayout.LabelField(inspectedComponent == null ? inspectedObject.name : inspectedComponent.GetType().Name, EditorStyles.boldLabel);
-            EditorGUILayout.LabelField(isAddingComponent
+            EditorGUILayout.LabelField(isChoosingLayer
+                ? "Choose a layer with Up and Down. Enter assigns it. Escape cancels."
+                : isAddingComponent
                 ? "Choose a component with Up and Down. Enter adds it. Escape cancels."
                 : inspectedComponent != null
                     ? "Up and Down navigate properties. Enter edits or activates. Escape returns to the inspector."
                     : "Up and Down navigate. Enter edits or activates. Backspace removes a component. Escape returns to the hierarchy.");
             scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
+            if (isChoosingLayer)
+            {
+                DrawLayerList();
+                EditorGUILayout.EndScrollView();
+                return;
+            }
+
             if (isAddingComponent)
             {
                 DrawComponentList();
@@ -137,7 +150,8 @@ namespace UnityAccess
                 {
                     string displayText = item.Label + ": " + item.Value;
                     bool isButton = item.Kind == InspectorItemKind.Component ||
-                        item.Kind == InspectorItemKind.AddComponent;
+                        item.Kind == InspectorItemKind.AddComponent ||
+                        item.Kind == InspectorItemKind.Layer;
                     if (isButton && AccessibleControls.Button(row, displayText, index == selectedIndex))
                     {
                         selectedIndex = index;
@@ -225,6 +239,20 @@ namespace UnityAccess
             }
         }
 
+        /// <summary>Draws the project-defined layers as an accessible selectable list.</summary>
+        private void DrawLayerList()
+        {
+            for (int index = 0; index < layerNames.Count; index++)
+            {
+                string layerName = layerNames[index];
+                if (AccessibleControls.Button(layerName, index == selectedLayerIndex))
+                {
+                    selectedLayerIndex = index;
+                    CommitLayerSelection();
+                }
+            }
+        }
+
         private void HandleKeyboardInput(Event currentEvent)
         {
             if (currentEvent.type != EventType.KeyDown)
@@ -254,6 +282,12 @@ namespace UnityAccess
             if (inspectedComponent != null)
             {
                 HandleComponentPropertyInput(currentEvent);
+                return;
+            }
+
+            if (isChoosingLayer)
+            {
+                HandleLayerListInput(currentEvent);
                 return;
             }
 
@@ -290,6 +324,35 @@ namespace UnityAccess
                 // Wait until this OnGUI cycle has ended so Unity cannot restore focus to the closing window.
                 EditorApplication.delayCall += SharedSelection.RequestHierarchyReturn;
             }
+        }
+
+        /// <summary>Handles keyboard navigation and activation for the accessible layer list.</summary>
+        private void HandleLayerListInput(Event currentEvent)
+        {
+            if (currentEvent.keyCode == KeyCode.UpArrow)
+            {
+                MoveLayerSelection(-1);
+            }
+            else if (currentEvent.keyCode == KeyCode.DownArrow)
+            {
+                MoveLayerSelection(1);
+            }
+            else if (AccessibleKeyboard.IsConfirm(currentEvent))
+            {
+                CommitLayerSelection();
+            }
+            else if (AccessibleKeyboard.IsCancel(currentEvent))
+            {
+                isChoosingLayer = false;
+                SpeakSafely("Layer selection cancelled. " + GetSelectedItemDescription() + ".");
+                Repaint();
+            }
+            else
+            {
+                return;
+            }
+
+            currentEvent.Use();
         }
 
         private void HandleComponentPropertyInput(Event currentEvent)
@@ -413,6 +476,12 @@ namespace UnityAccess
                 return;
             }
 
+            if (item.Kind == InspectorItemKind.Layer)
+            {
+                OpenLayerList();
+                return;
+            }
+
             if (!item.IsEditable)
             {
                 SpeakSafely(item.Label + ", read only.");
@@ -420,7 +489,11 @@ namespace UnityAccess
             }
 
             textEdit.Begin(item.Value);
-            string inputDescription = item.Kind == InspectorItemKind.Name ? "Type a name" : "Type a number";
+            string inputDescription = item.Kind == InspectorItemKind.Name
+                ? "Type a name"
+                : item.Kind == InspectorItemKind.Tag
+                    ? "Type an existing tag name"
+                    : "Type a number";
             SpeakSafely("Editing " + item.Label + ". Current value " + item.Value + ". " + inputDescription + " and press Enter. Escape cancels.");
             Repaint();
         }
@@ -437,6 +510,12 @@ namespace UnityAccess
             if (item.Kind == InspectorItemKind.Name)
             {
                 CommitNameEdit(item);
+                return;
+            }
+
+            if (item.Kind == InspectorItemKind.Tag)
+            {
+                CommitTagEdit(item);
                 return;
             }
 
@@ -475,6 +554,31 @@ namespace UnityAccess
             Repaint();
         }
 
+        /// <summary>Assigns an existing project tag entered through the accessible text box.</summary>
+        private void CommitTagEdit(InspectorItem item)
+        {
+            string newTag = textEdit.Value.Trim();
+            if (newTag.Length == 0)
+            {
+                SpeakSafely("The tag name cannot be empty.");
+                return;
+            }
+
+            if (!InternalEditorUtility.tags.Contains(newTag))
+            {
+                SpeakSafely("Tag " + newTag + " does not exist. Enter an existing project tag.");
+                return;
+            }
+
+            Undo.RecordObject(inspectedObject, "Unity Access assign tag");
+            inspectedObject.tag = newTag;
+            EditorUtility.SetDirty(inspectedObject);
+            textEdit.End();
+            RefreshItems();
+            SpeakSafely(item.Label + " changed to " + newTag + ".");
+            Repaint();
+        }
+
         private void SetInspectedObject(GameObject selectedObject)
         {
             if (selectedObject == null)
@@ -486,6 +590,7 @@ namespace UnityAccess
             selectedIndex = 0;
             textEdit.End();
             isAddingComponent = false;
+            isChoosingLayer = false;
             RefreshItems();
             SpeakSafely("Inspector opened for " + inspectedObject.name + ". " + items.Count + " properties. " + GetSelectedItemDescription() + ".");
             Repaint();
@@ -501,6 +606,8 @@ namespace UnityAccess
 
             Transform objectTransform = inspectedObject.transform;
             items.Add(new InspectorItem("Name", inspectedObject.name, InspectorItemKind.Name, null, null));
+            items.Add(new InspectorItem("Tag", inspectedObject.tag, InspectorItemKind.Tag, null, null));
+            items.Add(new InspectorItem("Layer", GetLayerDisplayName(inspectedObject.layer), InspectorItemKind.Layer, null, null));
             AddTransformItem("X position", () => objectTransform.localPosition.x, value => SetPositionAxis(0, value));
             AddTransformItem("Y position", () => objectTransform.localPosition.y, value => SetPositionAxis(1, value));
             AddTransformItem("Z position", () => objectTransform.localPosition.z, value => SetPositionAxis(2, value));
@@ -527,6 +634,69 @@ namespace UnityAccess
         private void AddTransformItem(string label, Func<float> getter, Action<float> setter)
         {
             items.Add(new InspectorItem(label, FormatFloat(getter()), InspectorItemKind.Number, setter, null));
+        }
+
+        /// <summary>Opens the accessible list of project-defined layers.</summary>
+        private void OpenLayerList()
+        {
+            layerNames.Clear();
+            layerNames.AddRange(InternalEditorUtility.layers);
+            if (layerNames.Count == 0)
+            {
+                SpeakSafely("No project layers are available.");
+                return;
+            }
+
+            string currentLayerName = LayerMask.LayerToName(inspectedObject.layer);
+            int currentIndex = layerNames.IndexOf(currentLayerName);
+            selectedLayerIndex = currentIndex >= 0 ? currentIndex : 0;
+            isChoosingLayer = true;
+            SpeakSafely("Layer list. " + layerNames.Count + " layers. " + layerNames[selectedLayerIndex] + ", " +
+                AccessibleList.Position(selectedLayerIndex, layerNames.Count) + ".");
+            Repaint();
+        }
+
+        /// <summary>Moves the selected layer and announces its list position through NVDA.</summary>
+        private void MoveLayerSelection(int direction)
+        {
+            selectedLayerIndex = AccessibleList.Move(selectedLayerIndex, direction, layerNames.Count);
+            SpeakSafely(layerNames[selectedLayerIndex] + ", " +
+                AccessibleList.Position(selectedLayerIndex, layerNames.Count) + ".");
+            Repaint();
+        }
+
+        /// <summary>Assigns the selected layer to the inspected object with Unity Undo support.</summary>
+        private void CommitLayerSelection()
+        {
+            if (selectedLayerIndex < 0 || selectedLayerIndex >= layerNames.Count)
+            {
+                return;
+            }
+
+            string layerName = layerNames[selectedLayerIndex];
+            int layer = LayerMask.NameToLayer(layerName);
+            if (layer < 0)
+            {
+                SpeakSafely("Layer " + layerName + " is no longer available.");
+                isChoosingLayer = false;
+                RefreshItems();
+                Repaint();
+                return;
+            }
+
+            Undo.RecordObject(inspectedObject, "Unity Access assign layer");
+            inspectedObject.layer = layer;
+            EditorUtility.SetDirty(inspectedObject);
+            isChoosingLayer = false;
+            RefreshItems();
+            SpeakSafely("Layer changed to " + layerName + ".");
+            Repaint();
+        }
+
+        private static string GetLayerDisplayName(int layer)
+        {
+            string layerName = LayerMask.LayerToName(layer);
+            return string.IsNullOrEmpty(layerName) ? "Layer " + layer : layerName;
         }
 
         private void OpenComponentView(Component component)
@@ -1081,7 +1251,13 @@ namespace UnityAccess
             }
 
             InspectorItem item = items[selectedIndex];
-            return item.Label + ", " + item.Value + (item.IsEditable ? ", editable" : ", read only");
+            string controlType = item.Kind == InspectorItemKind.Tag
+                ? ", text box"
+                : item.Kind == InspectorItemKind.Layer
+                    ? ", combo box"
+                    : string.Empty;
+            return item.Label + ", " + item.Value + controlType +
+                (item.IsEditable ? ", editable" : ", read only");
         }
 
         private static string FormatFloat(float value)
@@ -1259,7 +1435,13 @@ namespace UnityAccess
 
             internal bool IsEditable
             {
-                get { return Kind == InspectorItemKind.Name || setter != null; }
+                get
+                {
+                    return Kind == InspectorItemKind.Name ||
+                        Kind == InspectorItemKind.Tag ||
+                        Kind == InspectorItemKind.Layer ||
+                        setter != null;
+                }
             }
 
             internal void SetValue(float value)
@@ -1276,6 +1458,8 @@ namespace UnityAccess
         private enum InspectorItemKind
         {
             Name,
+            Tag,
+            Layer,
             Number,
             Component,
             AddComponent

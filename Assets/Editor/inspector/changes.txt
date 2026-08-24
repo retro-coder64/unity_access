@@ -12,3 +12,13 @@ InspectorAccessibilityWindow.cs
 Added field control types to selected-property descriptions for NVDA navigation.
 936
 953
+
+InspectorAccessibilityWindow.cs
+Added an accessible tag text box that validates and assigns existing project tags with Undo support.
+6
+1461
+
+InspectorAccessibilityWindow.cs
+Added an NVDA-announced keyboard layer list that assigns project-defined layers with Undo support.
+31
+1462

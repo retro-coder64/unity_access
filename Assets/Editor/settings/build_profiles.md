@@ -2,16 +2,26 @@
 
 ## overview
 
-this file describes the accessible build profiles window.
+this file describes the first phase of the accessible Build Profiles window.
 
-the window allows the user to view and manage supported Unity Build Profiles without relying on the standard inaccessible Build Profiles window.
+the purpose of this phase is to allow the user to configure a Windows standalone build, choose the scenes to include and build or run the game without using Unity's inaccessible Build Profiles window.
+
+this phase uses Unity's platform profile.
+
+custom Build Profile creation and profile-specific overrides are outside the current scope.
+
+## unity version
+
+target Unity 6.3 LTS.
+
+verify Unity behaviour and APIs against the Unity 6.3 manual before implementing build functionality.
 
 ## required imports
 
-use the current public Unity Editor APIs, including:
+use the current Unity 6.3 APIs where appropriate, including:
 
 - UnityEditor
-- UnityEditor.Build.Profile
+- UnityEditor.Build
 - UnityEditor.Build.Reporting
 - UnityEngine
 
@@ -19,178 +29,277 @@ use the current public Unity Editor APIs, including:
 
 - use the accessible controls located in ./utils
 - the entire window must be useable with NVDA and the keyboard
-- every control must have an accessible name and expose its current value or state
-- focus changes and important state changes must be available to NVDA
-- do not require the user to identify controls by colour, icons, position or tooltips
+- every control must have an accessible name
+- controls must expose their current value, selected state, checked state and enabled state
 - use a predictable tab order
-- do not use the standard Unity Build Profiles window as the accessible interface
+- use arrow keys for lists
+- use enter to activate the selected item
+- do not require the user to identify controls by colour, icons, position or tooltips
+- announce important changes such as active platform changes and build results
+- do not use drag and drop as the only way to manage scenes
+- do not open Unity's standard Build Profiles window as the accessible interface
 
-## window layout
+## main window
 
-the main window contains:
+the window contains:
 
-- build profile list
-- actions for the selected profile
+- target platform
+- scene list
+- Windows platform settings
+- development build
+- compression method
+- Build
+- Clean Build
+- Build and Run
 
-when the window opens, focus the build profile list.
+when the window opens, announce the current active build target.
 
-use up and down arrow keys to move through profiles.
+## target platform
 
-press enter to open the selected profile.
+this phase supports Windows standalone.
 
-## finding build profiles
+show Windows as the available target.
 
-find BuildProfile assets with:
+identify whether Windows Build Support is installed.
 
-AssetDatabase.FindAssets("t:BuildProfile")
+if Windows Build Support is not installed:
 
-convert each returned GUID to a path with:
+- tell the user that Windows Build Support is missing
+- do not attempt to perform a Windows build
+- provide the supported route to install the module with Unity Hub where possible
 
-AssetDatabase.GUIDToAssetPath
+### switch target
 
-load the profile with:
+use the current supported EditorUserBuildSettings.SwitchActiveBuildTarget overload.
 
-AssetDatabase.LoadAssetAtPath<BuildProfile>
+for 64-bit Windows standalone use the appropriate Standalone build target and StandaloneWindows64 target.
 
-store the profile name, asset path and BuildProfile reference.
+do not use the obsolete overload that accepts only BuildTarget.
 
-sort the list by profile name.
+changing build target can cause Unity to reimport assets and recompile scripts.
 
-use:
+only announce the switch as successful if Unity reports success.
 
-BuildProfile.GetActiveBuildProfile()
+## platform profile
 
-to identify the active custom build profile.
+this phase builds with the active Windows platform profile.
 
-if it returns null, the current platform profile is active. use EditorUserBuildSettings.activeBuildTarget to identify the current build target.
+a custom BuildProfile asset is not required for this phase.
 
-## profile actions
+if a custom BuildProfile is currently active, show its name and active state, but custom profile editing is outside this phase.
 
-a selected custom build profile can provide these actions:
+the user must be able to return to the platform profile where appropriate.
 
-- activate profile
-- edit scenes
-- edit scripting defines
-- duplicate profile
-- rename profile
-- delete profile
-- build
-- build and run
+use BuildProfile.GetActiveBuildProfile to determine whether a custom profile is active.
 
-only expose an action when it can be completed with a supported public Unity API.
+use BuildProfile.SetActiveBuildProfile(null) to return to the current platform profile.
 
-## activate profile
+## scene list
 
-activate a custom profile with:
+the Scene List controls which scenes are included in the build and their build order.
 
-BuildProfile.SetActiveBuildProfile(profile)
+for the platform profile use the global scene list.
 
-use:
+use EditorBuildSettings.globalScenes for the global scene list.
 
-BuildProfile.SetActiveBuildProfile(null)
+scene entries use EditorBuildSettingsScene.
 
-to return to the current platform profile.
+show each scene with:
 
-changing profile can cause Unity to reimport assets and recompile scripts.
-
-after Unity finishes the change, refresh the profile list and active state.
-
-## scenes
-
-use BuildProfile.overrideGlobalScenes to determine whether the profile uses its own scene list.
-
-if overrideGlobalScenes is true, edit BuildProfile.scenes.
-
-if overrideGlobalScenes is false, use EditorBuildSettings.globalScenes.
-
-scene entries use EditorBuildSettingsScene and must preserve:
-
+- scene name
 - scene path
-- enabled state
+- included or excluded state
 
-provide actions to:
-
-- add scene
-- remove scene
-- enable or disable scene
-- move scene up
-- move scene down
-
-use the object selector located in ./utils when selecting a SceneAsset.
-
-when changing a custom profile asset, use Undo.RecordObject where appropriate, mark the profile dirty and save the asset.
-
-## scripting defines
-
-use BuildProfile.scriptingDefines for the selected custom profile.
-
-present the defines through an accessible editable list.
+### scene actions
 
 allow the user to:
 
-- add define
-- remove define
+- Add Open Scenes
+- add a scene
+- remove a scene
+- include a scene
+- exclude a scene
+- move a scene up
+- move a scene down
 
-do not add duplicate define values.
+use the object selector located in ./utils to select a SceneAsset when adding a scene.
 
-when the list changes, mark the profile dirty and save the asset.
+do not allow the same scene to be added twice.
 
-## duplicate profile
+the order of included scenes is the build order.
 
-duplicate an existing custom profile with AssetDatabase.CopyAsset.
+do not require drag and drop for reordering.
 
-create a unique destination path with AssetDatabase.GenerateUniqueAssetPath.
+## windows platform settings
 
-the duplicated profile must keep the settings and target platform of the source profile.
+provide the basic Windows build settings needed for normal local development.
 
-refresh the profile list after the asset is created.
+### architecture
 
-## rename profile
+provide:
 
-rename the selected custom profile with AssetDatabase.RenameAsset.
+- Intel 64-bit
+- Intel 32-bit
+- ARM 64-bit
 
-validate that the new name is not empty.
+use Intel 64-bit as the normal Windows development target unless the project already has another valid setting.
 
-report any AssetDatabase error through the accessible UI.
+do not silently change an existing architecture.
 
-refresh the profile list after the rename succeeds.
+### build and run on
 
-## delete profile
+provide:
 
-show a confirmation before deleting a profile.
+- Local Machine
+- Remote Device when Unity makes it available
 
-if the profile being deleted is active, call:
+Local Machine is the normal option for this phase.
 
-BuildProfile.SetActiveBuildProfile(null)
+remote deployment configuration is outside the current scope.
 
-before deleting the asset.
+## development build
 
-delete the profile with AssetDatabase.DeleteAsset.
+provide an accessible Development Build checkbox.
 
-refresh the profile list after deletion.
+when enabled Unity includes development/debug information in the build.
+
+the following dependent debugging options are outside this phase:
+
+- Autoconnect Profiler
+- Deep Profiling
+- Script Debugging
+- Wait for Managed Debugger
+
+use their Unity defaults.
+
+## compression method
+
+provide:
+
+- Default
+- LZ4
+- LZ4HC
+
+preserve the project's current value.
+
+do not silently change compression when opening the window.
 
 ## build
 
-for a custom BuildProfile, build with BuildPipeline.BuildPlayer using BuildPlayerWithProfileOptions.
+Build creates the Windows player without automatically starting it.
 
-set:
+before building:
 
-- buildProfile to the selected BuildProfile
-- locationPathName to the path selected by the user
-- options to the required BuildOptions
+- ensure Windows is the active build target
+- ensure at least one enabled scene is available for the build
+- ask the user for the build output location
+- preserve Unity's normal validation behaviour
 
-for build and run, include BuildOptions.AutoRunPlayer.
+use Unity's supported BuildPipeline.BuildPlayer API.
 
-use the returned BuildReport to report whether the build succeeded, failed or was cancelled.
+when building the platform profile, use the current build target and scene list rather than inventing a custom BuildProfile.
 
-build errors must remain available in the Unity Console and should also be summarised through the accessible UI.
+use the returned BuildReport to determine the result.
 
-## creating new profiles
+## clean build
 
-the public BuildProfile API does not provide a general method for creating a new profile for an arbitrary target platform.
+provide a Clean Build action.
 
-do not use internal Unity APIs, reflection or undocumented serialized fields to work around this.
+use Unity's supported clean-build behaviour.
 
-within this window, creating another custom profile is supported by duplicating an existing BuildProfile.
+do not manually delete arbitrary folders from Library or Unity's build cache.
 
-adding a first custom profile for a platform that has no existing profile is outside the scope of this file until Unity provides a supported public API.
+## build and run
+
+Build and Run must:
+
+- build the active Windows platform profile
+- use the configured scene list
+- use the selected Windows platform settings
+- launch the resulting player on the selected Build and Run target
+
+for this phase the normal Build and Run target is Local Machine.
+
+use the appropriate current BuildOptions including AutoRunPlayer.
+
+## build result
+
+after a build finishes, announce:
+
+- succeeded
+- failed
+- cancelled
+
+when available also provide:
+
+- output path
+- build duration
+- build size
+
+build errors must remain available in the Unity Console.
+
+the user must not be required to inspect a visual Unity notification to know whether the build succeeded.
+
+## existing custom build profiles
+
+if custom BuildProfile assets exist, they may be listed read-only so the user knows they exist.
+
+use:
+
+AssetDatabase.FindAssets("t:BuildProfile")
+
+and:
+
+AssetDatabase.LoadAssetAtPath<BuildProfile>
+
+where needed.
+
+editing, creating, copying, renaming and deleting custom profiles are outside this phase.
+
+## outside current scope
+
+do not implement these Build Profiles features in this phase:
+
+- Add Build Profile
+- custom profile creation
+- copy profile
+- rename profile
+- delete profile
+- Asset Import Overrides
+- Diagnostics
+- Scripting Defines
+- profile-specific Scene List overrides
+- Player Settings overrides
+- Graphics Settings overrides
+- Quality Settings overrides
+- Adaptive Performance Settings
+- package-provided profile settings
+- Cloud Build
+- Force Skip Data Build
+- remote device configuration
+- Android, iOS, macOS, Linux, Web or other target-specific build settings
+
+these can be added after Unity Access can successfully create and run a Windows build.
+
+## unity manual references
+
+Create and manage build profiles:
+https://docs.unity3d.com/6000.3/Documentation/Manual/create-build-profile.html
+
+Build Profiles reference:
+https://docs.unity3d.com/6000.3/Documentation/Manual/build-profiles-reference.html
+
+Scene List:
+https://docs.unity3d.com/6000.3/Documentation/Manual/build-profile-scene-list.html
+
+Windows build settings:
+https://docs.unity3d.com/6000.3/Documentation/Manual/WindowsStandaloneBinaries.html
+
+BuildProfile API:
+https://docs.unity3d.com/6000.3/Documentation/ScriptReference/Build.Profile.BuildProfile.html
+
+EditorUserBuildSettings.SwitchActiveBuildTarget:
+https://docs.unity3d.com/6000.3/Documentation/ScriptReference/EditorUserBuildSettings.SwitchActiveBuildTarget.html
+
+EditorBuildSettings:
+https://docs.unity3d.com/6000.3/Documentation/ScriptReference/EditorBuildSettings.html

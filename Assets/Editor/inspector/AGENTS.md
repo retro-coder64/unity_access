@@ -57,3 +57,9 @@ number edit field x
 number edit field y
 number edit field z 
 object reference: use the object selector script located @ (./utils/object_selector.cs)
+
+## tags and layers 
+use the accessible controls to show a list of layers when the user edits the layer property. 
+when the user selects a layer the object should be added to the layer. 
+there must also be a tag text box in the inspector. 
+the user must enter the name of a tag to assign it to the object. 

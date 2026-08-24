@@ -3,33 +3,35 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.Build.Profile;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace UnityAccess
 {
-    /// <summary>Provides keyboard and NVDA access to Unity Build Profile assets.</summary>
+    /// <summary>Keyboard and NVDA access to the Windows platform build profile workflow.</summary>
     public sealed class BuildProfilesAccessibilityWindow : EditorWindow
     {
         private const string WindowTitle = "Accessible Build Profiles";
-        private const string EditControlName = "UnityAccessBuildProfileText";
         private const float RowHeight = 20.0f;
+        private const string CompressionPreferencePrefix = "UnityAccess.WindowsCompression.";
+        private static readonly string[] ArchitectureNames = { "Intel 32-bit", "Intel 64-bit", "ARM 64-bit" };
+        private static readonly int[] ArchitectureValues = { 0, 1, 2 };
+        private static readonly string[] CompressionNames = { "Default", "LZ4", "LZ4HC" };
 
-        private readonly List<ProfileEntry> profiles = new List<ProfileEntry>();
-        private readonly List<ProfileAction> actions = new List<ProfileAction>();
+        private readonly List<BuildRow> rows = new List<BuildRow>();
         private readonly List<EditorBuildSettingsScene> scenes = new List<EditorBuildSettingsScene>();
-        private readonly List<string> defines = new List<string>();
-        private readonly AccessibleTextEdit textEdit = new AccessibleTextEdit();
+        private readonly List<string> customProfileNames = new List<string>();
         private Vector2 scrollPosition;
-        private BuildProfilesView currentView = BuildProfilesView.Profiles;
-        private TextOperation textOperation;
-        private int selectedProfileIndex;
-        private int selectedActionIndex;
-        private int selectedSceneIndex;
-        private int selectedDefineIndex;
+        private WindowView view = WindowView.Main;
+        private int selectedIndex;
+        private int selectedSceneIndex = -1;
+        private int optionIndex;
+        private bool optionListOpen;
 
-        /// <summary>Opens the accessible Build Profiles interface.</summary>
+        /// <summary>Opens the accessible Windows Build Profiles window.</summary>
         [MenuItem("Unity Access/Build Profiles", false, 21)]
         public static void Open()
         {
@@ -37,10 +39,10 @@ namespace UnityAccess
             {
                 BuildProfilesAccessibilityWindow window = GetWindow<BuildProfilesAccessibilityWindow>();
                 window.titleContent = new GUIContent(WindowTitle);
-                window.minSize = new Vector2(560.0f, 320.0f);
+                window.minSize = new Vector2(640.0f, 380.0f);
                 window.Show();
                 window.Focus();
-                window.RefreshProfiles(true);
+                window.OpenMain(true);
             }
             catch (Exception exception)
             {
@@ -50,7 +52,7 @@ namespace UnityAccess
 
         private void OnEnable()
         {
-            RefreshProfiles(false);
+            if (view == WindowView.Main) RefreshMainRows();
         }
 
         private void OnGUI()
@@ -72,953 +74,511 @@ namespace UnityAccess
             EditorGUILayout.LabelField(WindowTitle, EditorStyles.boldLabel);
             EditorGUILayout.LabelField(GetInstructions());
             scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
-            if (currentView == BuildProfilesView.Profiles)
+            EditorGUILayout.LabelField(GetViewName(), EditorStyles.boldLabel);
+            if (rows.Count == 0) EditorGUILayout.LabelField("No items are available.");
+            for (int index = 0; index < rows.Count; index++)
             {
-                DrawProfiles();
+                BuildRow row = rows[index];
+                if (AccessibleControls.Button(row.Label + ": " + row.Value, index == selectedIndex))
+                {
+                    selectedIndex = index;
+                    RememberSelectedScene();
+                    ActivateSelectedRow();
+                }
             }
-            else if (currentView == BuildProfilesView.Actions)
-            {
-                DrawActions();
-            }
-            else if (currentView == BuildProfilesView.Scenes)
-            {
-                DrawScenes();
-            }
-            else
-            {
-                DrawDefines();
-            }
-
             EditorGUILayout.EndScrollView();
         }
 
         private string GetInstructions()
         {
-            if (textEdit.IsEditing)
-            {
-                return "Enter saves the text; Escape cancels.";
-            }
-
-            switch (currentView)
-            {
-                case BuildProfilesView.Profiles:
-                    return "Up and Down navigate profiles; Enter opens the selected profile.";
-                case BuildProfilesView.Actions:
-                    return "Up and Down or Tab navigate actions; Enter activates; Escape returns to profiles.";
-                case BuildProfilesView.Scenes:
-                    return "Up and Down navigate; Enter toggles; A adds; Delete removes; Ctrl+Up or Ctrl+Down reorders; O changes scene source; Escape returns.";
-                default:
-                    return "Up and Down navigate; Enter edits; Insert adds; Delete removes; Escape returns.";
-            }
-        }
-
-        private void DrawProfiles()
-        {
-            if (profiles.Count == 0)
-            {
-                EditorGUILayout.LabelField("No profiles are available.");
-                return;
-            }
-
-            for (int index = 0; index < profiles.Count; index++)
-            {
-                ProfileEntry entry = profiles[index];
-                string label = entry.Name + (entry.IsActive ? " (Active)" : string.Empty) +
-                    (entry.Profile == null ? " - Platform profile" : " - Custom profile");
-                if (AccessibleControls.Button(label, index == selectedProfileIndex))
-                {
-                    selectedProfileIndex = index;
-                    OpenActions();
-                }
-            }
-        }
-
-        private void DrawActions()
-        {
-            EditorGUILayout.LabelField(GetSelectedProfile().Name, EditorStyles.boldLabel);
-            for (int index = 0; index < actions.Count; index++)
-            {
-                ProfileAction action = actions[index];
-                Rect row = EditorGUILayout.GetControlRect(false, RowHeight);
-                if (textEdit.IsEditing && index == selectedActionIndex)
-                {
-                    textEdit.Value = AccessibleControls.TextBox(
-                        row, EditControlName, action.Label, textEdit.Value, true);
-                }
-                else if (AccessibleControls.Button(row, action.Label, index == selectedActionIndex))
-                {
-                    selectedActionIndex = index;
-                    ActivateSelectedAction();
-                }
-            }
-        }
-
-        private void DrawScenes()
-        {
-            ProfileEntry entry = GetSelectedProfile();
-            EditorGUILayout.LabelField(entry.Name + " scenes", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField(entry.Profile != null && entry.Profile.overrideGlobalScenes
-                ? "Scene source: This profile"
-                : "Scene source: Global build scenes");
-            if (scenes.Count == 0)
-            {
-                EditorGUILayout.LabelField("No scenes. Press A to add one.");
-            }
-
-            for (int index = 0; index < scenes.Count; index++)
-            {
-                EditorBuildSettingsScene scene = scenes[index];
-                string sceneName = string.IsNullOrWhiteSpace(scene.path)
-                    ? "Missing scene"
-                    : Path.GetFileNameWithoutExtension(scene.path);
-                string label = sceneName + " - " + (scene.enabled ? "Enabled" : "Disabled") + " - " + scene.path;
-                if (AccessibleControls.Button(label, index == selectedSceneIndex))
-                {
-                    selectedSceneIndex = index;
-                    ToggleSelectedScene();
-                }
-            }
-
-            EditorGUILayout.Space();
-            if (AccessibleControls.Button("Add scene (A)", false))
-            {
-                AddScene();
-            }
-
-            using (new EditorGUI.DisabledScope(scenes.Count == 0))
-            {
-                if (AccessibleControls.Button("Remove selected scene (Delete)", false))
-                {
-                    RemoveSelectedScene();
-                }
-
-                if (AccessibleControls.Button("Move selected scene up (Ctrl+Up)", false))
-                {
-                    MoveSelectedScene(-1);
-                }
-
-                if (AccessibleControls.Button("Move selected scene down (Ctrl+Down)", false))
-                {
-                    MoveSelectedScene(1);
-                }
-            }
-
-            if (entry.Profile != null && AccessibleControls.Button("Change scene source (O)", false))
-            {
-                ToggleSceneOverride();
-            }
-        }
-
-        private void DrawDefines()
-        {
-            EditorGUILayout.LabelField(GetSelectedProfile().Name + " scripting defines", EditorStyles.boldLabel);
-            if (defines.Count == 0 && !textEdit.IsEditing)
-            {
-                EditorGUILayout.LabelField("No scripting defines. Press Insert to add one.");
-            }
-
-            for (int index = 0; index < defines.Count; index++)
-            {
-                Rect row = EditorGUILayout.GetControlRect(false, RowHeight);
-                if (textEdit.IsEditing && textOperation == TextOperation.EditDefine && index == selectedDefineIndex)
-                {
-                    textEdit.Value = AccessibleControls.TextBox(
-                        row, EditControlName, "Scripting define", textEdit.Value, true);
-                }
-                else if (AccessibleControls.Button(row, defines[index], index == selectedDefineIndex))
-                {
-                    selectedDefineIndex = index;
-                    BeginEditDefine();
-                }
-            }
-
-            if (textEdit.IsEditing && textOperation == TextOperation.AddDefine)
-            {
-                Rect row = EditorGUILayout.GetControlRect(false, RowHeight);
-                textEdit.Value = AccessibleControls.TextBox(
-                    row, EditControlName, "New scripting define", textEdit.Value, true);
-            }
-
-            EditorGUILayout.Space();
-            if (AccessibleControls.Button("Add scripting define (Insert)", false))
-            {
-                BeginAddDefine();
-            }
-
-            using (new EditorGUI.DisabledScope(defines.Count == 0))
-            {
-                if (AccessibleControls.Button("Remove selected define (Delete)", false))
-                {
-                    RemoveSelectedDefine();
-                }
-            }
+            if (optionListOpen) return "Up and Down choose a value; Enter applies; Escape cancels.";
+            if (view == WindowView.Scenes) return "Up and Down navigate scenes and actions; Enter activates; Escape returns.";
+            return "Up and Down or Tab navigate; Enter activates; Escape returns.";
         }
 
         private void HandleKeyboard(Event currentEvent)
         {
-            if (currentEvent == null || currentEvent.type != EventType.KeyDown)
+            if (currentEvent == null || currentEvent.type != EventType.KeyDown) return;
+            int direction;
+            if (optionListOpen)
             {
-                return;
-            }
-
-            if (textEdit.IsEditing)
-            {
-                if (AccessibleKeyboard.IsConfirm(currentEvent))
-                {
-                    CommitTextOperation();
-                    currentEvent.Use();
-                }
+                if (AccessibleKeyboard.TryGetVerticalDirection(currentEvent, out direction)) MoveOption(direction);
+                else if (AccessibleKeyboard.IsConfirm(currentEvent)) CommitOption();
                 else if (AccessibleKeyboard.IsCancel(currentEvent))
                 {
-                    textEdit.End();
-                    textOperation = TextOperation.None;
-                    Speak("Edit cancelled.");
-                    currentEvent.Use();
-                    Repaint();
+                    optionListOpen = false;
+                    Speak("Choice cancelled. " + DescribeSelectedRow() + ".");
                 }
-
+                else return;
+                currentEvent.Use();
                 return;
             }
 
-            int direction;
-            if (currentView == BuildProfilesView.Profiles && AccessibleKeyboard.TryGetVerticalDirection(currentEvent, out direction))
+            if (AccessibleKeyboard.TryGetVerticalDirection(currentEvent, out direction) || TryGetTabDirection(currentEvent, out direction))
             {
-                MoveProfile(direction);
+                selectedIndex = AccessibleList.Move(selectedIndex, direction, rows.Count);
+                RememberSelectedScene();
+                AccessibleList.KeepVisible(ref scrollPosition, selectedIndex, RowHeight);
+                Speak(DescribeSelectedRow() + ".");
             }
-            else if (currentView == BuildProfilesView.Profiles && AccessibleKeyboard.IsConfirm(currentEvent))
-            {
-                OpenActions();
-            }
-            else if (currentView == BuildProfilesView.Actions &&
-                (AccessibleKeyboard.TryGetVerticalDirection(currentEvent, out direction) || TryGetTabDirection(currentEvent, out direction)))
-            {
-                MoveAction(direction);
-            }
-            else if (currentView == BuildProfilesView.Actions && AccessibleKeyboard.IsConfirm(currentEvent))
-            {
-                ActivateSelectedAction();
-            }
-            else if (currentView == BuildProfilesView.Scenes)
-            {
-                if (!HandleSceneKeyboard(currentEvent))
-                {
-                    return;
-                }
-            }
-            else if (currentView == BuildProfilesView.Defines)
-            {
-                if (!HandleDefineKeyboard(currentEvent))
-                {
-                    return;
-                }
-            }
-            else if (currentView == BuildProfilesView.Actions && AccessibleKeyboard.IsCancel(currentEvent))
-            {
-                ReturnToProfiles();
-            }
-            else
-            {
-                return;
-            }
-
+            else if (AccessibleKeyboard.IsConfirm(currentEvent)) ActivateSelectedRow();
+            else if (AccessibleKeyboard.IsCancel(currentEvent) && view != WindowView.Main) OpenMain(false);
+            else return;
             currentEvent.Use();
-        }
-
-        private bool HandleSceneKeyboard(Event currentEvent)
-        {
-            int direction;
-            if (AccessibleKeyboard.TryGetVerticalDirection(currentEvent, out direction))
-            {
-                if (currentEvent.control)
-                {
-                    MoveSelectedScene(direction);
-                }
-                else
-                {
-                    MoveSceneSelection(direction);
-                }
-            }
-            else if (AccessibleKeyboard.IsConfirm(currentEvent))
-            {
-                ToggleSelectedScene();
-            }
-            else if (currentEvent.keyCode == KeyCode.A)
-            {
-                AddScene();
-            }
-            else if (currentEvent.keyCode == KeyCode.Delete || currentEvent.keyCode == KeyCode.Backspace)
-            {
-                RemoveSelectedScene();
-            }
-            else if (currentEvent.keyCode == KeyCode.O)
-            {
-                ToggleSceneOverride();
-            }
-            else if (AccessibleKeyboard.IsCancel(currentEvent))
-            {
-                ReturnToActions();
-            }
-            else
-            {
-                return false;
-            }
-
-            return true;
-        }
-
-        private bool HandleDefineKeyboard(Event currentEvent)
-        {
-            int direction;
-            if (AccessibleKeyboard.TryGetVerticalDirection(currentEvent, out direction))
-            {
-                MoveDefineSelection(direction);
-            }
-            else if (AccessibleKeyboard.IsConfirm(currentEvent))
-            {
-                BeginEditDefine();
-            }
-            else if (currentEvent.keyCode == KeyCode.Insert)
-            {
-                BeginAddDefine();
-            }
-            else if (currentEvent.keyCode == KeyCode.Delete || currentEvent.keyCode == KeyCode.Backspace)
-            {
-                RemoveSelectedDefine();
-            }
-            else if (AccessibleKeyboard.IsCancel(currentEvent))
-            {
-                ReturnToActions();
-            }
-            else
-            {
-                return false;
-            }
-
-            return true;
         }
 
         private static bool TryGetTabDirection(Event currentEvent, out int direction)
         {
             direction = 0;
-            if (currentEvent.keyCode != KeyCode.Tab)
-            {
-                return false;
-            }
-
+            if (currentEvent.keyCode != KeyCode.Tab) return false;
             direction = currentEvent.shift ? -1 : 1;
             return true;
         }
 
-        private void RefreshProfiles(bool announce)
+        private void OpenMain(bool announce)
         {
-            BuildProfile previouslySelected = profiles.Count > 0 && selectedProfileIndex >= 0 && selectedProfileIndex < profiles.Count
-                ? profiles[selectedProfileIndex].Profile
-                : null;
-            profiles.Clear();
-            BuildProfile activeProfile = BuildProfile.GetActiveBuildProfile();
-            profiles.Add(new ProfileEntry(
-                EditorUserBuildSettings.activeBuildTarget + " platform profile",
-                string.Empty,
-                null,
-                activeProfile == null));
-
-            string[] guids = AssetDatabase.FindAssets("t:BuildProfile");
-            foreach (string guid in guids)
-            {
-                string path = AssetDatabase.GUIDToAssetPath(guid);
-                BuildProfile profile = AssetDatabase.LoadAssetAtPath<BuildProfile>(path);
-                if (profile != null)
-                {
-                    profiles.Add(new ProfileEntry(profile.name, path, profile, profile == activeProfile));
-                }
-            }
-
-            ProfileEntry platformEntry = profiles[0];
-            List<ProfileEntry> customProfiles = profiles.Skip(1)
-                .OrderBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            profiles.Clear();
-            profiles.Add(platformEntry);
-            profiles.AddRange(customProfiles);
-            selectedProfileIndex = 0;
-            if (previouslySelected != null)
-            {
-                int previousIndex = profiles.FindIndex(entry => entry.Profile == previouslySelected);
-                selectedProfileIndex = previousIndex >= 0 ? previousIndex : 0;
-            }
-
-            currentView = BuildProfilesView.Profiles;
+            view = WindowView.Main;
+            optionListOpen = false;
+            RefreshMainRows();
+            selectedIndex = AccessibleList.Clamp(selectedIndex, rows.Count);
             scrollPosition = Vector2.zero;
             if (announce)
             {
-                Speak("Build profiles list. " + GetProfileDescription() + ". Use Up and Down, then Enter.");
+                Speak("Build Profiles opened. Current active build target is " + EditorUserBuildSettings.activeBuildTarget +
+                    ". " + DescribeSelectedRow() + ".");
             }
-
+            else Speak("Windows platform build profile. " + DescribeSelectedRow() + ".");
             Repaint();
         }
 
-        private void MoveProfile(int direction)
+        private void RefreshMainRows()
         {
-            selectedProfileIndex = AccessibleList.Move(selectedProfileIndex, direction, profiles.Count);
-            AccessibleList.KeepVisible(ref scrollPosition, selectedProfileIndex, RowHeight);
-            Speak(GetProfileDescription() + ".");
-            Repaint();
+            rows.Clear();
+            bool supportInstalled = IsWindowsBuildSupportInstalled();
+            bool windowsActive = IsWindowsTarget(EditorUserBuildSettings.activeBuildTarget);
+            BuildProfile activeProfile = BuildProfile.GetActiveBuildProfile();
+            rows.Add(BuildRow.Action("Target Platform", "Windows" + (supportInstalled ? "; Build Support installed" : "; Build Support missing"),
+                BuildAction.AnnounceTarget, !supportInstalled));
+            rows.Add(BuildRow.Action("Switch Active Target", windowsActive ? "Windows is active; disabled" : "Switch to Windows",
+                BuildAction.SwitchToWindows, !supportInstalled || windowsActive));
+            rows.Add(BuildRow.Action("Active Profile", activeProfile == null ? "Windows platform profile" : activeProfile.name + "; custom profile",
+                BuildAction.ReturnToPlatformProfile, activeProfile == null));
+            rows.Add(BuildRow.Action("Scene List", GetSceneSummary(), BuildAction.OpenScenes));
+            rows.Add(BuildRow.Options("Architecture", GetArchitectureName(), ArchitectureNames, BuildAction.SetArchitecture));
+            rows.Add(BuildRow.Options("Build and Run On", "Local Machine", new[] { "Local Machine" }, BuildAction.SetRunTarget));
+            rows.Add(BuildRow.Boolean("Development Build", EditorUserBuildSettings.development, BuildAction.ToggleDevelopment));
+            rows.Add(BuildRow.Options("Compression Method", GetCompressionName(), CompressionNames, BuildAction.SetCompression));
+            rows.Add(BuildRow.Action("Build", "button", BuildAction.Build, !supportInstalled));
+            rows.Add(BuildRow.Action("Clean Build", "button", BuildAction.CleanBuild, !supportInstalled));
+            rows.Add(BuildRow.Action("Build and Run", "Local Machine", BuildAction.BuildAndRun, !supportInstalled));
+            rows.Add(BuildRow.Action("Existing Custom Profiles", GetCustomProfileCount() + "; read-only", BuildAction.OpenCustomProfiles));
         }
 
-        private string GetProfileDescription()
+        private string GetSceneSummary()
         {
-            if (profiles.Count == 0 || selectedProfileIndex < 0)
-            {
-                return "No profiles";
-            }
-
-            ProfileEntry entry = profiles[selectedProfileIndex];
-            return entry.Name + (entry.IsActive ? ", active" : ", inactive") +
-                (entry.Profile == null ? ", platform profile, " : ", custom profile, ") +
-                AccessibleList.Position(selectedProfileIndex, profiles.Count);
+            EditorBuildSettingsScene[] globalScenes = EditorBuildSettings.globalScenes;
+            int enabledCount = globalScenes.Count(scene => scene.enabled);
+            return enabledCount + " included of " + globalScenes.Length;
         }
 
-        private void OpenActions()
+        private void ActivateSelectedRow()
         {
-            if (profiles.Count == 0)
+            if (selectedIndex < 0 || selectedIndex >= rows.Count) { Speak("No item is available."); return; }
+            BuildRow row = rows[selectedIndex];
+            if (row.Disabled)
             {
-                Speak("No profiles are available.");
+                Speak(row.Label + " is disabled. " + row.Value + ".");
+                if (row.ActionKind == BuildAction.AnnounceTarget && !IsWindowsBuildSupportInstalled())
+                    Speak("Windows Build Support is missing. Install it for this Editor version with Unity Hub, Add modules.");
                 return;
             }
-
-            actions.Clear();
-            ProfileEntry entry = GetSelectedProfile();
-            actions.Add(new ProfileAction(entry.IsActive ? "Active profile" : "Activate profile", ProfileActionKind.Activate));
-            actions.Add(new ProfileAction("Edit scenes", ProfileActionKind.EditScenes));
-            if (entry.Profile != null)
+            if (row.OptionNames.Length > 0)
             {
-                actions.Add(new ProfileAction("Edit scripting defines", ProfileActionKind.EditDefines));
-                actions.Add(new ProfileAction("Duplicate profile", ProfileActionKind.Duplicate));
-                actions.Add(new ProfileAction("Rename profile", ProfileActionKind.Rename));
-                actions.Add(new ProfileAction("Delete profile", ProfileActionKind.Delete));
-                actions.Add(new ProfileAction("Build", ProfileActionKind.Build));
-                actions.Add(new ProfileAction("Build and run", ProfileActionKind.BuildAndRun));
+                optionIndex = Math.Max(0, Array.IndexOf(row.OptionNames, row.Value));
+                optionListOpen = true;
+                Speak(row.Label + " combo box opened. " + row.OptionNames[optionIndex] + ", " +
+                    AccessibleList.Position(optionIndex, row.OptionNames.Length) + ".");
+                return;
             }
+            PerformAction(row.ActionKind);
+        }
 
-            selectedActionIndex = 0;
-            currentView = BuildProfilesView.Actions;
-            scrollPosition = Vector2.zero;
-            Speak(entry.Name + " actions. " + GetActionDescription() + ".");
+        private void PerformAction(BuildAction action)
+        {
+            switch (action)
+            {
+                case BuildAction.AnnounceTarget:
+                    Speak("Windows target. Windows Build Support is installed."); break;
+                case BuildAction.SwitchToWindows: SwitchToWindows(); break;
+                case BuildAction.ReturnToPlatformProfile: ReturnToPlatformProfile(); break;
+                case BuildAction.OpenScenes: OpenScenes(); break;
+                case BuildAction.ToggleDevelopment:
+                    EditorUserBuildSettings.development = !EditorUserBuildSettings.development;
+                    RefreshAndAnnounce("Development Build changed to " + (EditorUserBuildSettings.development ? "On, checked" : "Off, not checked") + "."); break;
+                case BuildAction.Build: BuildWindows(false, false); break;
+                case BuildAction.CleanBuild: BuildWindows(false, true); break;
+                case BuildAction.BuildAndRun: BuildWindows(true, false); break;
+                case BuildAction.OpenCustomProfiles: OpenCustomProfiles(); break;
+                case BuildAction.AddOpenScenes: AddOpenScenes(); break;
+                case BuildAction.AddScene: AddScene(); break;
+                case BuildAction.ToggleScene: ToggleScene(); break;
+                case BuildAction.RemoveScene: RemoveScene(); break;
+                case BuildAction.MoveSceneUp: MoveScene(-1); break;
+                case BuildAction.MoveSceneDown: MoveScene(1); break;
+            }
+        }
+
+        private void MoveOption(int direction)
+        {
+            BuildRow row = rows[selectedIndex];
+            optionIndex = AccessibleList.Move(optionIndex, direction, row.OptionNames.Length);
+            Speak(row.OptionNames[optionIndex] + ", " + AccessibleList.Position(optionIndex, row.OptionNames.Length) + ".");
             Repaint();
         }
 
-        private void MoveAction(int direction)
+        private void CommitOption()
         {
-            selectedActionIndex = AccessibleList.Move(selectedActionIndex, direction, actions.Count);
-            AccessibleList.KeepVisible(ref scrollPosition, selectedActionIndex, RowHeight);
-            Speak(GetActionDescription() + ".");
+            BuildRow row = rows[selectedIndex];
+            string value = row.OptionNames[optionIndex];
+            optionListOpen = false;
+            if (row.ActionKind == BuildAction.SetArchitecture)
+            {
+                int index = Array.IndexOf(ArchitectureNames, value);
+                PlayerSettings.SetArchitecture(NamedBuildTarget.Standalone, ArchitectureValues[index]);
+                RefreshAndAnnounce("Architecture changed to " + value + ".");
+            }
+            else if (row.ActionKind == BuildAction.SetCompression)
+            {
+                EditorPrefs.SetInt(GetCompressionPreferenceKey(), Array.IndexOf(CompressionNames, value));
+                RefreshAndAnnounce("Compression Method changed to " + value + ".");
+            }
+            else Speak("Build and Run On remains Local Machine.");
+        }
+
+        private void RefreshAndAnnounce(string message)
+        {
+            int previousIndex = selectedIndex;
+            RefreshMainRows();
+            selectedIndex = AccessibleList.Clamp(previousIndex, rows.Count);
+            Speak(message);
             Repaint();
         }
 
-        private string GetActionDescription()
+        private void SwitchToWindows()
         {
-            return actions.Count == 0 ? "No actions" : actions[selectedActionIndex].Label + ", button, " +
-                AccessibleList.Position(selectedActionIndex, actions.Count);
-        }
-
-        private void ActivateSelectedAction()
-        {
-            if (actions.Count == 0)
-            {
-                return;
-            }
-
-            switch (actions[selectedActionIndex].Kind)
-            {
-                case ProfileActionKind.Activate:
-                    ActivateProfile();
-                    break;
-                case ProfileActionKind.EditScenes:
-                    OpenScenes();
-                    break;
-                case ProfileActionKind.EditDefines:
-                    OpenDefines();
-                    break;
-                case ProfileActionKind.Duplicate:
-                    DuplicateProfile();
-                    break;
-                case ProfileActionKind.Rename:
-                    BeginRename();
-                    break;
-                case ProfileActionKind.Delete:
-                    DeleteProfile();
-                    break;
-                case ProfileActionKind.Build:
-                    BuildSelectedProfile(false);
-                    break;
-                case ProfileActionKind.BuildAndRun:
-                    BuildSelectedProfile(true);
-                    break;
-            }
-        }
-
-        private void ActivateProfile()
-        {
-            ProfileEntry entry = GetSelectedProfile();
-            if (entry.IsActive)
-            {
-                Speak(entry.Name + " is already active.");
-                return;
-            }
-
             try
             {
-                Speak("Activating " + entry.Name + ". Unity may reimport assets and recompile scripts.");
-                BuildProfile.SetActiveBuildProfile(entry.Profile);
-                EditorApplication.delayCall += delegate { RefreshProfiles(true); };
+                BuildTarget target = GetConfiguredWindowsTarget();
+                Speak("Switching active target to Windows. Unity may reimport assets and recompile scripts.");
+                bool switched = EditorUserBuildSettings.SwitchActiveBuildTarget(NamedBuildTarget.Standalone, target);
+                if (!switched)
+                {
+                    Speak("Unity did not switch the active target to Windows.");
+                    return;
+                }
+                EditorApplication.delayCall += delegate
+                {
+                    if (this == null) return;
+                    RefreshMainRows();
+                    Speak("Windows is now the active build target.");
+                    Repaint();
+                };
             }
-            catch (Exception exception)
+            catch (Exception exception) { ReportError("switch the active build target", exception); }
+        }
+
+        private void ReturnToPlatformProfile()
+        {
+            try
             {
-                ReportError("activate " + entry.Name, exception);
+                BuildProfile.SetActiveBuildProfile(null);
+                RefreshAndAnnounce("The Windows platform profile is now active.");
             }
+            catch (Exception exception) { ReportError("activate the Windows platform profile", exception); }
         }
 
         private void OpenScenes()
         {
-            ProfileEntry entry = GetSelectedProfile();
-            BuildProfile profile = entry.Profile;
-            bool usesProfileScenes = profile != null && profile.overrideGlobalScenes;
             scenes.Clear();
-            scenes.AddRange(usesProfileScenes ? profile.scenes : EditorBuildSettings.globalScenes);
-            selectedSceneIndex = AccessibleList.Clamp(0, scenes.Count);
-            currentView = BuildProfilesView.Scenes;
+            scenes.AddRange(EditorBuildSettings.globalScenes);
+            view = WindowView.Scenes;
+            selectedIndex = 0;
+            selectedSceneIndex = scenes.Count == 0 ? -1 : 0;
+            RefreshSceneRows();
             scrollPosition = Vector2.zero;
-            Speak(entry.Name + " scenes. " + (usesProfileScenes ? "Using this profile's scene list. " : "Using the global scene list. ") + GetSceneDescription() + ".");
+            Speak("Global Scene List opened. " + DescribeSelectedRow() + ".");
             Repaint();
         }
 
-        private void MoveSceneSelection(int direction)
+        private void RefreshSceneRows()
         {
-            selectedSceneIndex = AccessibleList.Move(selectedSceneIndex, direction, scenes.Count);
-            AccessibleList.KeepVisible(ref scrollPosition, selectedSceneIndex, RowHeight);
-            Speak(GetSceneDescription() + ".");
-            Repaint();
-        }
-
-        private string GetSceneDescription()
-        {
-            if (scenes.Count == 0 || selectedSceneIndex < 0)
+            rows.Clear();
+            for (int index = 0; index < scenes.Count; index++)
             {
-                return "No scenes";
+                EditorBuildSettingsScene scene = scenes[index];
+                string name = string.IsNullOrEmpty(scene.path) ? "Missing Scene" : Path.GetFileNameWithoutExtension(scene.path);
+                rows.Add(BuildRow.Action(name, (scene.enabled ? "Included, checked" : "Excluded, not checked") + "; " + scene.path,
+                    BuildAction.ToggleScene, false, index));
             }
+            rows.Add(BuildRow.Action("Add Open Scenes", "button", BuildAction.AddOpenScenes));
+            rows.Add(BuildRow.Action("Add Scene", "button", BuildAction.AddScene));
+            bool hasScene = scenes.Count > 0;
+            rows.Add(BuildRow.Action("Remove Selected Scene", hasScene ? "button" : "disabled", BuildAction.RemoveScene, !hasScene));
+            rows.Add(BuildRow.Action("Move Selected Scene Up", selectedSceneIndex > 0 ? "button" : "disabled",
+                BuildAction.MoveSceneUp, selectedSceneIndex <= 0));
+            rows.Add(BuildRow.Action("Move Selected Scene Down",
+                selectedSceneIndex >= 0 && selectedSceneIndex < scenes.Count - 1 ? "button" : "disabled",
+                BuildAction.MoveSceneDown, selectedSceneIndex < 0 || selectedSceneIndex >= scenes.Count - 1));
+            selectedIndex = AccessibleList.Clamp(selectedIndex, rows.Count);
+        }
 
-            EditorBuildSettingsScene scene = scenes[selectedSceneIndex];
-            return Path.GetFileNameWithoutExtension(scene.path) + ", " + (scene.enabled ? "enabled" : "disabled") +
-                ", " + scene.path + ", " + AccessibleList.Position(selectedSceneIndex, scenes.Count);
+        private int GetSelectedSceneIndex()
+        {
+            return selectedIndex >= 0 && selectedIndex < rows.Count ? rows[selectedIndex].SceneIndex : -1;
+        }
+
+        private void RememberSelectedScene()
+        {
+            int sceneIndex = GetSelectedSceneIndex();
+            if (sceneIndex >= 0)
+            {
+                selectedSceneIndex = sceneIndex;
+            }
+        }
+
+        private void AddOpenScenes()
+        {
+            int addedCount = 0;
+            for (int index = 0; index < SceneManager.sceneCount; index++)
+            {
+                Scene scene = SceneManager.GetSceneAt(index);
+                if (!scene.IsValid() || string.IsNullOrEmpty(scene.path) || scenes.Any(item =>
+                    string.Equals(item.path, scene.path, StringComparison.OrdinalIgnoreCase))) continue;
+                scenes.Add(new EditorBuildSettingsScene(scene.path, true));
+                addedCount++;
+            }
+            SaveScenes();
+            RefreshSceneRows();
+            Speak(addedCount == 0 ? "No new saved open scenes were available." : addedCount + " open scenes added and included.");
+            Repaint();
         }
 
         private void AddScene()
         {
             Speak("Scene selector opened.");
-            UnityEngine.Object selectorOwner = GetSelectedProfile().Profile != null
-                ? GetSelectedProfile().Profile
-                : this;
-            ObjectSelector.Open(typeof(SceneAsset), selectorOwner, null, OnSceneSelected);
+            ObjectSelector.Open(typeof(SceneAsset), this, null, OnSceneSelected);
         }
 
         private void OnSceneSelected(UnityEngine.Object selectedObject)
         {
             SceneAsset sceneAsset = selectedObject as SceneAsset;
-            if (sceneAsset == null)
-            {
-                Speak("No scene was added.");
-                Focus();
-                return;
-            }
-
+            if (sceneAsset == null) { Speak("No scene was added."); Focus(); return; }
             string path = AssetDatabase.GetAssetPath(sceneAsset);
             if (scenes.Any(scene => string.Equals(scene.path, path, StringComparison.OrdinalIgnoreCase)))
             {
-                Speak(sceneAsset.name + " is already in the scene list.");
-                Focus();
-                return;
+                Speak(sceneAsset.name + " is already in the Scene List."); Focus(); return;
             }
-
             scenes.Add(new EditorBuildSettingsScene(path, true));
             selectedSceneIndex = scenes.Count - 1;
-            SaveScenes("Add build scene");
-            Speak(sceneAsset.name + " added, enabled, " + AccessibleList.Position(selectedSceneIndex, scenes.Count) + ".");
-            Focus();
+            SaveScenes(); RefreshSceneRows(); selectedIndex = selectedSceneIndex;
+            Speak(sceneAsset.name + " added and included, " + AccessibleList.Position(selectedIndex, scenes.Count) + ".");
+            Focus(); Repaint();
+        }
+
+        private void ToggleScene()
+        {
+            int sceneIndex = selectedSceneIndex;
+            if (sceneIndex < 0) { Speak("Select a scene first."); return; }
+            EditorBuildSettingsScene scene = scenes[sceneIndex];
+            scenes[sceneIndex] = new EditorBuildSettingsScene(scene.path, !scene.enabled);
+            SaveScenes(); RefreshSceneRows(); selectedIndex = sceneIndex;
+            Speak(Path.GetFileNameWithoutExtension(scene.path) + (scenes[sceneIndex].enabled ? " included, checked." : " excluded, not checked."));
             Repaint();
         }
 
-        private void ToggleSelectedScene()
+        private void RemoveScene()
         {
-            if (scenes.Count == 0 || selectedSceneIndex < 0)
-            {
-                Speak("There is no scene to toggle.");
-                return;
-            }
-
-            EditorBuildSettingsScene existing = scenes[selectedSceneIndex];
-            scenes[selectedSceneIndex] = new EditorBuildSettingsScene(existing.path, !existing.enabled);
-            SaveScenes("Toggle build scene");
-            Speak(GetSceneDescription() + ".");
-            Repaint();
+            int sceneIndex = FindActionSceneIndex();
+            if (sceneIndex < 0) { Speak("Select a scene before using Remove Selected Scene."); return; }
+            string name = Path.GetFileNameWithoutExtension(scenes[sceneIndex].path);
+            scenes.RemoveAt(sceneIndex);
+            selectedSceneIndex = scenes.Count == 0 ? -1 : Mathf.Clamp(sceneIndex, 0, scenes.Count - 1);
+            SaveScenes(); RefreshSceneRows(); selectedIndex = AccessibleList.Clamp(selectedSceneIndex, rows.Count);
+            Speak(name + " removed. " + DescribeSelectedRow() + "."); Repaint();
         }
 
-        private void RemoveSelectedScene()
+        private void MoveScene(int direction)
         {
-            if (scenes.Count == 0 || selectedSceneIndex < 0)
+            int sceneIndex = FindActionSceneIndex();
+            int destination = sceneIndex + direction;
+            if (sceneIndex < 0 || destination < 0 || destination >= scenes.Count)
             {
-                Speak("There is no scene to remove.");
-                return;
+                Speak("The selected scene cannot move " + (direction < 0 ? "up" : "down") + "."); return;
             }
-
-            string sceneName = Path.GetFileNameWithoutExtension(scenes[selectedSceneIndex].path);
-            scenes.RemoveAt(selectedSceneIndex);
-            selectedSceneIndex = AccessibleList.Clamp(selectedSceneIndex, scenes.Count);
-            SaveScenes("Remove build scene");
-            Speak(sceneName + " removed. " + GetSceneDescription() + ".");
-            Repaint();
-        }
-
-        private void MoveSelectedScene(int direction)
-        {
-            if (scenes.Count == 0 || selectedSceneIndex < 0)
-            {
-                Speak("There is no scene to move.");
-                return;
-            }
-
-            int destination = Mathf.Clamp(selectedSceneIndex + direction, 0, scenes.Count - 1);
-            if (destination == selectedSceneIndex)
-            {
-                Speak(direction < 0 ? "The scene is already first." : "The scene is already last.");
-                return;
-            }
-
-            EditorBuildSettingsScene scene = scenes[selectedSceneIndex];
-            scenes.RemoveAt(selectedSceneIndex);
-            scenes.Insert(destination, scene);
+            EditorBuildSettingsScene scene = scenes[sceneIndex];
             selectedSceneIndex = destination;
-            SaveScenes("Reorder build scenes");
-            Speak(GetSceneDescription() + ".");
-            Repaint();
+            scenes.RemoveAt(sceneIndex); scenes.Insert(destination, scene); SaveScenes(); RefreshSceneRows(); selectedIndex = destination;
+            Speak(Path.GetFileNameWithoutExtension(scene.path) + " moved " + (direction < 0 ? "up" : "down") + ", " +
+                AccessibleList.Position(destination, scenes.Count) + "."); Repaint();
         }
 
-        private void ToggleSceneOverride()
+        private int FindActionSceneIndex()
         {
-            BuildProfile profile = GetSelectedProfile().Profile;
-            if (profile == null)
-            {
-                Speak("Platform profiles always use the global build scene list.");
-                return;
-            }
-
-            Undo.RecordObject(profile, "Change build profile scene source");
-            profile.overrideGlobalScenes = !profile.overrideGlobalScenes;
-            EditorUtility.SetDirty(profile);
-            AssetDatabase.SaveAssetIfDirty(profile);
-            OpenScenes();
-            Speak(profile.overrideGlobalScenes
-                ? "Now using this profile's scene list. " + GetSceneDescription() + "."
-                : "Now using the global scene list. " + GetSceneDescription() + ".");
+            return selectedSceneIndex;
         }
 
-        private void SaveScenes(string undoName)
+        private void SaveScenes()
         {
-            BuildProfile profile = GetSelectedProfile().Profile;
-            if (profile != null && profile.overrideGlobalScenes)
-            {
-                Undo.RecordObject(profile, undoName);
-                profile.scenes = scenes.ToArray();
-                EditorUtility.SetDirty(profile);
-                AssetDatabase.SaveAssetIfDirty(profile);
-            }
-            else
-            {
-                EditorBuildSettings.globalScenes = scenes.ToArray();
-            }
+            EditorBuildSettings.globalScenes = scenes.ToArray();
         }
 
-        private void OpenDefines()
+        private void OpenCustomProfiles()
         {
-            BuildProfile profile = RequireCustomProfile();
-            if (profile == null)
+            customProfileNames.Clear();
+            foreach (string guid in AssetDatabase.FindAssets("t:BuildProfile"))
             {
-                return;
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                BuildProfile profile = AssetDatabase.LoadAssetAtPath<BuildProfile>(path);
+                if (profile != null) customProfileNames.Add(profile.name + "; " + path);
             }
-
-            defines.Clear();
-            defines.AddRange(profile.scriptingDefines ?? Array.Empty<string>());
-            selectedDefineIndex = AccessibleList.Clamp(0, defines.Count);
-            currentView = BuildProfilesView.Defines;
+            customProfileNames.Sort(StringComparer.OrdinalIgnoreCase);
+            view = WindowView.CustomProfiles;
+            rows.Clear();
+            for (int index = 0; index < customProfileNames.Count; index++)
+                rows.Add(BuildRow.Action(customProfileNames[index], "read-only; disabled", BuildAction.None, true));
+            selectedIndex = AccessibleList.Clamp(0, rows.Count);
             scrollPosition = Vector2.zero;
-            Speak(profile.name + " scripting defines. " + GetDefineDescription() + ".");
+            Speak("Existing custom profiles, read-only. " + DescribeSelectedRow() + ".");
             Repaint();
         }
 
-        private void MoveDefineSelection(int direction)
+        private void BuildWindows(bool runAfterBuild, bool cleanBuild)
         {
-            selectedDefineIndex = AccessibleList.Move(selectedDefineIndex, direction, defines.Count);
-            AccessibleList.KeepVisible(ref scrollPosition, selectedDefineIndex, RowHeight);
-            Speak(GetDefineDescription() + ".");
-            Repaint();
-        }
-
-        private string GetDefineDescription()
-        {
-            return defines.Count == 0 || selectedDefineIndex < 0
-                ? "No scripting defines"
-                : defines[selectedDefineIndex] + ", editable, " + AccessibleList.Position(selectedDefineIndex, defines.Count);
-        }
-
-        private void BeginAddDefine()
-        {
-            textOperation = TextOperation.AddDefine;
-            textEdit.Begin(string.Empty);
-            Speak("New scripting define, editable text box, empty. Enter adds; Escape cancels.");
-            Repaint();
-        }
-
-        private void BeginEditDefine()
-        {
-            if (defines.Count == 0 || selectedDefineIndex < 0)
-            {
-                Speak("There is no scripting define to edit. Press Insert to add one.");
-                return;
-            }
-
-            textOperation = TextOperation.EditDefine;
-            textEdit.Begin(defines[selectedDefineIndex]);
-            Speak("Scripting define, editable text box, " + textEdit.Value + ". Enter saves; Escape cancels.");
-            Repaint();
-        }
-
-        private void RemoveSelectedDefine()
-        {
-            if (defines.Count == 0 || selectedDefineIndex < 0)
-            {
-                Speak("There is no scripting define to remove.");
-                return;
-            }
-
-            string removed = defines[selectedDefineIndex];
-            defines.RemoveAt(selectedDefineIndex);
-            selectedDefineIndex = AccessibleList.Clamp(selectedDefineIndex, defines.Count);
-            SaveDefines("Remove scripting define");
-            Speak(removed + " removed. " + GetDefineDescription() + ".");
-            Repaint();
-        }
-
-        private void SaveDefines(string undoName)
-        {
-            BuildProfile profile = RequireCustomProfile();
-            if (profile == null)
-            {
-                return;
-            }
-
-            Undo.RecordObject(profile, undoName);
-            profile.scriptingDefines = defines.ToArray();
-            EditorUtility.SetDirty(profile);
-            AssetDatabase.SaveAssetIfDirty(profile);
-        }
-
-        private void BeginRename()
-        {
-            textOperation = TextOperation.RenameProfile;
-            textEdit.Begin(GetSelectedProfile().Name);
-            Speak("Profile name, editable text box, " + textEdit.Value + ". Enter renames; Escape cancels.");
-            Repaint();
-        }
-
-        private void CommitTextOperation()
-        {
-            if (textOperation == TextOperation.RenameProfile)
-            {
-                CommitRename();
-            }
-            else
-            {
-                CommitDefine();
-            }
-        }
-
-        private void CommitRename()
-        {
-            ProfileEntry entry = GetSelectedProfile();
-            string newName = textEdit.Value.Trim();
-            if (string.IsNullOrEmpty(newName))
-            {
-                Speak("Profile name cannot be empty. The previous name was kept.");
-                return;
-            }
-
-            string error = AssetDatabase.RenameAsset(entry.Path, newName);
-            if (!string.IsNullOrEmpty(error))
-            {
-                PluginErrorLog.Write(nameof(BuildProfilesAccessibilityWindow), new InvalidOperationException(error));
-                Speak("Unity could not rename the profile. " + error);
-                return;
-            }
-
-            textEdit.End();
-            textOperation = TextOperation.None;
-            AssetDatabase.SaveAssets();
-            RefreshProfiles(false);
-            Speak("Profile renamed to " + newName + ". " + GetProfileDescription() + ".");
-        }
-
-        private void CommitDefine()
-        {
-            string value = textEdit.Value.Trim();
-            if (string.IsNullOrEmpty(value))
-            {
-                Speak("A scripting define cannot be empty.");
-                return;
-            }
-
-            int duplicateIndex = defines.FindIndex(define => string.Equals(define, value, StringComparison.Ordinal));
-            if (duplicateIndex >= 0 && (textOperation == TextOperation.AddDefine || duplicateIndex != selectedDefineIndex))
-            {
-                Speak(value + " is already in the scripting define list.");
-                return;
-            }
-
-            if (textOperation == TextOperation.AddDefine)
-            {
-                defines.Add(value);
-                selectedDefineIndex = defines.Count - 1;
-                SaveDefines("Add scripting define");
-                Speak(value + " added, " + AccessibleList.Position(selectedDefineIndex, defines.Count) + ".");
-            }
-            else
-            {
-                defines[selectedDefineIndex] = value;
-                SaveDefines("Edit scripting define");
-                Speak("Scripting define changed to " + value + ".");
-            }
-
-            textEdit.End();
-            textOperation = TextOperation.None;
-            Repaint();
-        }
-
-        private void DuplicateProfile()
-        {
-            ProfileEntry entry = GetSelectedProfile();
-            string directory = Path.GetDirectoryName(entry.Path) ?? "Assets";
-            string destination = AssetDatabase.GenerateUniqueAssetPath(Path.Combine(directory, entry.Name + " Copy.asset").Replace('\\', '/'));
-            if (!AssetDatabase.CopyAsset(entry.Path, destination))
-            {
-                Speak("Unity could not duplicate " + entry.Name + ".");
-                return;
-            }
-
-            AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
-            RefreshProfiles(false);
-            BuildProfile duplicate = AssetDatabase.LoadAssetAtPath<BuildProfile>(destination);
-            int duplicateIndex = profiles.FindIndex(profile => profile.Profile == duplicate);
-            selectedProfileIndex = duplicateIndex >= 0 ? duplicateIndex : selectedProfileIndex;
-            Speak(entry.Name + " duplicated as " + (duplicate == null ? Path.GetFileNameWithoutExtension(destination) : duplicate.name) + ". " + GetProfileDescription() + ".");
-            Repaint();
-        }
-
-        private void DeleteProfile()
-        {
-            ProfileEntry entry = GetSelectedProfile();
-            Speak("Confirm deletion of " + entry.Name + ".");
-            if (!EditorUtility.DisplayDialog(
-                "Delete Build Profile",
-                "Delete the build profile '" + entry.Name + "'? This cannot be undone.",
-                "Delete",
-                "Cancel"))
-            {
-                Speak("Deletion cancelled.");
-                return;
-            }
-
-            if (entry.IsActive)
-            {
-                BuildProfile.SetActiveBuildProfile(null);
-            }
-
-            if (!AssetDatabase.DeleteAsset(entry.Path))
-            {
-                Speak("Unity could not delete " + entry.Name + ".");
-                return;
-            }
-
-            RefreshProfiles(false);
-            Speak(entry.Name + " deleted. " + GetProfileDescription() + ".");
-        }
-
-        private void BuildSelectedProfile(bool runAfterBuild)
-        {
-            BuildProfile profile = RequireCustomProfile();
-            if (profile == null)
-            {
-                return;
-            }
-
+            if (!ValidateBuildRequest()) return;
             string location = EditorUtility.SaveFilePanel(
-                runAfterBuild ? "Choose Build and Run Location" : "Choose Build Location",
-                string.Empty,
-                profile.name,
-                string.Empty);
+                runAfterBuild ? "Choose Build and Run Location" : cleanBuild ? "Choose Clean Build Location" : "Choose Build Location",
+                string.Empty, PlayerSettings.productName + ".exe", "exe");
             Focus();
-            if (string.IsNullOrEmpty(location))
-            {
-                Speak("Build cancelled before it started.");
-                return;
-            }
+            if (string.IsNullOrEmpty(location)) { Speak("Build cancelled before it started."); return; }
 
             try
             {
-                Speak((runAfterBuild ? "Build and run" : "Build") + " started for " + profile.name + ".");
-                BuildPlayerWithProfileOptions options = new BuildPlayerWithProfileOptions
+                BuildOptions options = GetConfiguredBuildOptions(runAfterBuild, cleanBuild);
+                BuildPlayerOptions playerOptions = new BuildPlayerOptions
                 {
-                    buildProfile = profile,
+                    scenes = EditorBuildSettings.globalScenes.Where(scene => scene.enabled).Select(scene => scene.path).ToArray(),
                     locationPathName = location,
-                    options = runAfterBuild ? BuildOptions.AutoRunPlayer : BuildOptions.None
+                    target = GetConfiguredWindowsTarget(),
+                    targetGroup = BuildTargetGroup.Standalone,
+                    subtarget = (int)StandaloneBuildSubtarget.Player,
+                    options = options
                 };
-                BuildReport report = BuildPipeline.BuildPlayer(options);
-                string result = report == null ? "did not return a report" : report.summary.result.ToString();
-                Speak(profile.name + " build " + result + ". See the Unity Console for build details.");
+                Speak((cleanBuild ? "Clean build" : runAfterBuild ? "Build and Run" : "Build") + " started.");
+                BuildReport report = BuildPipeline.BuildPlayer(playerOptions);
+                AnnounceBuildReport(report);
             }
-            catch (Exception exception)
+            catch (Exception exception) { ReportError("build the Windows player", exception); }
+        }
+
+        private bool ValidateBuildRequest()
+        {
+            if (!IsWindowsBuildSupportInstalled())
             {
-                ReportError("build " + profile.name, exception);
+                Speak("Windows Build Support is missing. Install it with Unity Hub before building."); return false;
             }
-        }
-
-        private void ReturnToActions()
-        {
-            textEdit.End();
-            textOperation = TextOperation.None;
-            OpenActions();
-        }
-
-        private void ReturnToProfiles()
-        {
-            currentView = BuildProfilesView.Profiles;
-            scrollPosition = Vector2.zero;
-            Speak("Build profiles list. " + GetProfileDescription() + ".");
-            Repaint();
-        }
-
-        private ProfileEntry GetSelectedProfile()
-        {
-            return profiles[selectedProfileIndex];
-        }
-
-        private BuildProfile RequireCustomProfile()
-        {
-            ProfileEntry entry = GetSelectedProfile();
-            if (entry.Profile == null)
+            if (!EditorBuildSettings.globalScenes.Any(scene => scene.enabled && !string.IsNullOrEmpty(scene.path)))
             {
-                Speak("This action requires a custom build profile.");
+                Speak("Build cannot start because the global Scene List has no included scenes."); return false;
             }
+            BuildTarget configuredTarget = GetConfiguredWindowsTarget();
+            if (EditorUserBuildSettings.activeBuildTarget != configuredTarget)
+            {
+                Speak("Switching to the configured Windows target before building.");
+                if (!EditorUserBuildSettings.SwitchActiveBuildTarget(NamedBuildTarget.Standalone, configuredTarget))
+                {
+                    Speak("Unity did not switch to the configured Windows target. Build cancelled."); return false;
+                }
+            }
+            if (BuildProfile.GetActiveBuildProfile() != null)
+            {
+                BuildProfile.SetActiveBuildProfile(null);
+                Speak("The Windows platform profile was activated for this build.");
+            }
+            return true;
+        }
 
-            return entry.Profile;
+        private BuildOptions GetConfiguredBuildOptions(bool runAfterBuild, bool cleanBuild)
+        {
+            BuildOptions options = BuildOptions.None;
+            if (EditorUserBuildSettings.development) options |= BuildOptions.Development;
+            if (runAfterBuild) options |= BuildOptions.AutoRunPlayer;
+            if (cleanBuild) options |= BuildOptions.CleanBuildCache;
+            int compression = GetCompressionIndex();
+            if (compression == 1) options |= BuildOptions.CompressWithLz4;
+            else if (compression == 2) options |= BuildOptions.CompressWithLz4HC;
+            return options;
+        }
+
+        private static void AnnounceBuildReport(BuildReport report)
+        {
+            if (report == null) { Speak("Build failed because Unity did not return a build report. See the Unity Console."); return; }
+            BuildSummary summary = report.summary;
+            string result = summary.result == BuildResult.Succeeded ? "succeeded" :
+                summary.result == BuildResult.Cancelled ? "cancelled" : "failed";
+            Speak("Build " + result + ". Output: " + summary.outputPath + ". Duration: " + summary.totalTime +
+                ". Size: " + summary.totalSize + " bytes. See the Unity Console for build details.");
+        }
+
+        private static bool IsWindowsBuildSupportInstalled()
+        {
+            return BuildPipeline.IsBuildTargetSupported(BuildTargetGroup.Standalone, BuildTarget.StandaloneWindows64);
+        }
+
+        private static bool IsWindowsTarget(BuildTarget target)
+        {
+            return target == BuildTarget.StandaloneWindows || target == BuildTarget.StandaloneWindows64;
+        }
+
+        private static BuildTarget GetConfiguredWindowsTarget()
+        {
+            return PlayerSettings.GetArchitecture(NamedBuildTarget.Standalone) == 0
+                ? BuildTarget.StandaloneWindows : BuildTarget.StandaloneWindows64;
+        }
+
+        private static string GetArchitectureName()
+        {
+            int value = PlayerSettings.GetArchitecture(NamedBuildTarget.Standalone);
+            int index = Array.IndexOf(ArchitectureValues, value);
+            return index >= 0 ? ArchitectureNames[index] : "Unknown architecture " + value;
+        }
+
+        private static string GetCompressionPreferenceKey()
+        {
+            return CompressionPreferencePrefix + PlayerSettings.productGUID;
+        }
+
+        private static int GetCompressionIndex()
+        {
+            return Mathf.Clamp(EditorPrefs.GetInt(GetCompressionPreferenceKey(), 0), 0, CompressionNames.Length - 1);
+        }
+
+        private static string GetCompressionName() { return CompressionNames[GetCompressionIndex()]; }
+
+        private static int GetCustomProfileCount() { return AssetDatabase.FindAssets("t:BuildProfile").Length; }
+
+        private string DescribeSelectedRow()
+        {
+            if (rows.Count == 0 || selectedIndex < 0) return "No items";
+            BuildRow row = rows[selectedIndex];
+            return row.Label + ", " + row.Value + (row.Disabled ? ", disabled" : string.Empty) + ", " +
+                AccessibleList.Position(selectedIndex, rows.Count);
+        }
+
+        private string GetViewName()
+        {
+            if (view == WindowView.Scenes) return "Global Scene List";
+            if (view == WindowView.CustomProfiles) return "Existing Custom Profiles (Read-only)";
+            return "Windows Platform Profile";
         }
 
         private static void ReportError(string operation, Exception exception)
@@ -1027,69 +587,32 @@ namespace UnityAccess
             Speak("Unity could not " + operation + ". See debug.txt and the Unity Console for details.");
         }
 
-        private static void Speak(string message)
+        private static void Speak(string message) { AccessibleSpeech.Speak(message, nameof(BuildProfilesAccessibilityWindow)); }
+
+        private sealed class BuildRow
         {
-            AccessibleSpeech.Speak(message, nameof(BuildProfilesAccessibilityWindow));
-        }
-
-        private sealed class ProfileEntry
-        {
-            internal ProfileEntry(string name, string path, BuildProfile profile, bool isActive)
-            {
-                Name = name;
-                Path = path;
-                Profile = profile;
-                IsActive = isActive;
-            }
-
-            internal string Name { get; private set; }
-
-            internal string Path { get; private set; }
-
-            internal BuildProfile Profile { get; private set; }
-
-            internal bool IsActive { get; private set; }
-        }
-
-        private sealed class ProfileAction
-        {
-            internal ProfileAction(string label, ProfileActionKind kind)
-            {
-                Label = label;
-                Kind = kind;
-            }
-
+            private BuildRow(string label, string value, BuildAction action, string[] options, bool disabled, int sceneIndex)
+            { Label = label; Value = value; ActionKind = action; OptionNames = options; Disabled = disabled; SceneIndex = sceneIndex; }
             internal string Label { get; private set; }
-
-            internal ProfileActionKind Kind { get; private set; }
+            internal string Value { get; private set; }
+            internal BuildAction ActionKind { get; private set; }
+            internal string[] OptionNames { get; private set; }
+            internal bool Disabled { get; private set; }
+            internal int SceneIndex { get; private set; }
+            internal static BuildRow Action(string label, string value, BuildAction action, bool disabled = false, int sceneIndex = -1)
+            { return new BuildRow(label, value, action, Array.Empty<string>(), disabled, sceneIndex); }
+            internal static BuildRow Boolean(string label, bool value, BuildAction action)
+            { return Action(label, value ? "On, checked" : "Off, not checked", action); }
+            internal static BuildRow Options(string label, string value, string[] options, BuildAction action)
+            { return new BuildRow(label, value, action, options, false, -1); }
         }
 
-        private enum BuildProfilesView
+        private enum WindowView { Main, Scenes, CustomProfiles }
+        private enum BuildAction
         {
-            Profiles,
-            Actions,
-            Scenes,
-            Defines
-        }
-
-        private enum ProfileActionKind
-        {
-            Activate,
-            EditScenes,
-            EditDefines,
-            Duplicate,
-            Rename,
-            Delete,
-            Build,
-            BuildAndRun
-        }
-
-        private enum TextOperation
-        {
-            None,
-            RenameProfile,
-            AddDefine,
-            EditDefine
+            None, AnnounceTarget, SwitchToWindows, ReturnToPlatformProfile, OpenScenes, SetArchitecture, SetRunTarget,
+            ToggleDevelopment, SetCompression, Build, CleanBuild, BuildAndRun, OpenCustomProfiles, AddOpenScenes,
+            AddScene, ToggleScene, RemoveScene, MoveSceneUp, MoveSceneDown
         }
     }
 }
