@@ -1,0 +1,8 @@
+ProjectSettingsAccessibilityWindow.cs
+Added an NVDA-accessible, keyboard-driven Project Settings window with public-API adapters for application, display, and rendering settings, validation, refresh behavior, menu access, and safe error reporting.
+1
+573
+BuildProfilesAccessibilityWindow.cs
+Added an NVDA-accessible Build Profiles window supporting profile discovery and activation, global scene editing for platform profiles, custom-profile scene and scripting-define editing, duplication, rename, confirmed deletion, build, build-and-run, menu access, and safe error reporting through public Unity APIs.
+1
+1095
