@@ -16,6 +16,9 @@ namespace UnityAccess
         private const float RowHeight = 22.0f;
         private const int MaximumSearchResultsPerColumn = 100;
 
+        private static readonly string[] StandardMenuOptions = { "Rename", "Delete", "Move" };
+        private static readonly string[] ImageMenuOptions = { "Rename", "Delete", "Move", "Convert to texture", "Convert to sprite" };
+
         private readonly List<AssetEntry> folders = new List<AssetEntry>();
         private readonly List<AssetEntry> files = new List<AssetEntry>();
         private readonly AccessibleTextEdit renameEdit = new AccessibleTextEdit();
@@ -52,7 +55,9 @@ namespace UnityAccess
                 Name = System.IO.Path.GetFileName(path);
                 IsFolder = isFolder;
                 Type assetType = isFolder ? null : AssetDatabase.GetMainAssetTypeAtPath(path);
-                TypeName = isFolder ? "Folder" : (assetType == null ? "Asset" : assetType.Name);
+                TextureImporter textureImporter = isFolder ? null : AssetImporter.GetAtPath(path) as TextureImporter;
+                bool isSprite = textureImporter != null && textureImporter.textureType == TextureImporterType.Sprite;
+                TypeName = isFolder ? "Folder" : (isSprite ? "Sprite" : (assetType == null ? "Asset" : assetType.Name));
             }
         }
 
@@ -193,7 +198,7 @@ namespace UnityAccess
                 return;
             }
 
-            string[] options = { "Rename", "Delete", "Move" };
+            string[] options = GetMenuOptions(menuTarget);
             EditorGUILayout.Space(6.0f);
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             EditorGUILayout.LabelField("Options for " + menuTarget.Name, EditorStyles.boldLabel);
@@ -345,11 +350,12 @@ namespace UnityAccess
 
         private void HandleMenuKeyboard(Event currentEvent)
         {
+            string[] options = GetMenuOptions(menuTarget);
             int direction;
             if (AccessibleKeyboard.TryGetVerticalDirection(currentEvent, out direction))
             {
-                menuIndex = Mathf.Clamp(menuIndex + direction, 0, 2);
-                AccessibleSpeech.Speak(new[] { "Rename", "Delete", "Move" }[menuIndex] + ", " + (menuIndex + 1) + " of 3", SourceFile);
+                menuIndex = Mathf.Clamp(menuIndex + direction, 0, options.Length - 1);
+                AccessibleSpeech.Speak(options[menuIndex] + ", " + (menuIndex + 1) + " of " + options.Length, SourceFile);
                 currentEvent.Use();
                 Repaint();
             }
@@ -480,8 +486,20 @@ namespace UnityAccess
         {
             menuTarget = target;
             menuIndex = 0;
-            AccessibleSpeech.Speak("Options for " + target.Name + ". Rename, 1 of 3", SourceFile);
+            string[] options = GetMenuOptions(target);
+            AccessibleSpeech.Speak("Options for " + target.Name + ". " + options[0] + ", 1 of " + options.Length, SourceFile);
             Repaint();
+        }
+
+        /// <summary>Includes texture conversion actions only for assets handled by Unity's texture importer.</summary>
+        private static string[] GetMenuOptions(AssetEntry target)
+        {
+            if (target != null && !target.IsFolder && AssetImporter.GetAtPath(target.Path) is TextureImporter)
+            {
+                return ImageMenuOptions;
+            }
+
+            return StandardMenuOptions;
         }
 
         private void RunMenuOption()
@@ -501,9 +519,62 @@ namespace UnityAccess
             {
                 Delete(target);
             }
-            else
+            else if (menuIndex == 2)
             {
                 Move(target);
+            }
+            else if (menuIndex == 3)
+            {
+                ConvertImage(target, TextureImporterType.Default, "texture");
+            }
+            else if (menuIndex == 4)
+            {
+                ConvertImage(target, TextureImporterType.Sprite, "sprite");
+            }
+        }
+
+        /// <summary>Changes an image's Unity import mode and reimports it without bypassing its metadata.</summary>
+        private void ConvertImage(AssetEntry target, TextureImporterType importerType, string typeName)
+        {
+            TextureImporter textureImporter = AssetImporter.GetAtPath(target.Path) as TextureImporter;
+            if (textureImporter == null)
+            {
+                InvalidOperationException exception = new InvalidOperationException("No TextureImporter was found for " + target.Path);
+                PluginErrorLog.Write(SourceFile, exception);
+                AccessibleSpeech.Speak("Conversion failed. The selected asset is not a supported image.", SourceFile);
+                return;
+            }
+
+            try
+            {
+                textureImporter.textureType = importerType;
+                if (importerType == TextureImporterType.Sprite)
+                {
+                    // A Multiple sprite import with no slices creates no usable Sprite sub-asset.
+                    textureImporter.spriteImportMode = SpriteImportMode.Single;
+                    textureImporter.alphaIsTransparency = true;
+                    textureImporter.mipmapEnabled = false;
+                }
+
+                textureImporter.SaveAndReimport();
+
+                TextureImporter refreshedImporter = AssetImporter.GetAtPath(target.Path) as TextureImporter;
+                bool hasExpectedImporterType = refreshedImporter != null && refreshedImporter.textureType == importerType;
+                bool hasUsableSprite = importerType != TextureImporterType.Sprite
+                    || AssetDatabase.LoadAssetAtPath<Sprite>(target.Path) != null;
+                if (!hasExpectedImporterType || !hasUsableSprite)
+                {
+                    throw new InvalidOperationException("Unity did not create the requested " + typeName + " for " + target.Path);
+                }
+
+                AssetDatabase.SaveAssets();
+                RefreshEntries();
+                AccessibleSpeech.Speak(target.Name + " converted to " + typeName, SourceFile);
+            }
+            catch (Exception exception)
+            {
+                PluginErrorLog.Write(SourceFile, exception);
+                AccessibleSpeech.Speak("Conversion failed. See Editor debug log.", SourceFile);
             }
         }
 

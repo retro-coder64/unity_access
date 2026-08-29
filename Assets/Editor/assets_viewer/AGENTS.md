@@ -42,11 +42,14 @@ the user will have the following options
 - rename 
 - delete 
 - move 
+
 ### folder 
 the user will have the following options 
 - rename 
 - delete 
 - move 
+### additional options 
+for additional options for assets or folders reference options.md 
 ## moving files 
 when the user uses the move option. 
 Use the editor api to open a folder selection dialog box for the user to navigate. 

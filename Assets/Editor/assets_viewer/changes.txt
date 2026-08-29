@@ -14,3 +14,19 @@ AccessibleAssetsViewer.cs
 Changed Search from an automatically focused typing field into the selected top item in the window. NVDA now announces it through list navigation; Enter starts editing, Escape ends editing, Down Arrow enters results, and Up Arrow from the first folder or file returns to Search.
 26
 818
+AccessibleAssetsViewer.cs
+Added image-specific Convert to texture and Convert to sprite entries to the accessible options menu, with dynamic keyboard bounds and NVDA position announcements.
+19
+500
+AccessibleAssetsViewer.cs
+Added TextureImporter-based image conversion, Unity reimporting, NVDA success and failure announcements, and PluginErrorLog error reporting.
+503
+561
+AccessibleAssetsViewer.cs
+Fixed sprite conversion by forcing single-sprite import settings and verifying that Unity created a usable Sprite before announcing success through NVDA.
+548
+570
+AccessibleAssetsViewer.cs
+Changed asset type reporting to identify PNGs imported as sprites from their TextureImporter mode, so the viewer and NVDA announce Sprite instead of Texture2D after conversion.
+58
+60

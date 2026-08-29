@@ -22,3 +22,13 @@ InspectorAccessibilityWindow.cs
 Added an NVDA-announced keyboard layer list that assigns project-defined layers with Undo support.
 31
 1462
+
+InspectorAccessibilityWindow.cs
+Changed component property traversal to include all serialized properties, including fields hidden from Unity's standard Inspector, so supported sprite and other object-reference fields are detected.
+740
+746
+
+InspectorAccessibilityWindow.cs
+Restored the visible-child filter while retaining all-property traversal, preventing descent into hidden internal containers without excluding supported non-visible component properties.
+744
+746

@@ -737,7 +737,9 @@ namespace UnityAccess
             serializedObject.UpdateIfRequiredOrScript();
             SerializedProperty iterator = serializedObject.GetIterator();
             bool enterChildren = true;
-            while (iterator.NextVisible(enterChildren))
+            // Traverse every serialized property, including values Unity hides from its
+            // standard Inspector, so supported references such as sprites are not omitted.
+            while (iterator.Next(enterChildren))
             {
                 // Descend through serialized containers so fields in nested serializable
                 // objects are detected. Supported values are leaves in this view.
