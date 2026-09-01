@@ -28,7 +28,7 @@ the inspector will allow the user to edit the following properties
 - - y scale 
 - - z scale 
 - any other fields the inspector locates on an object 
-- component properties [properties.md]component.md)
+- component properties component.md)
 the user can also remove components by navigating to the component and pressing backspace. 
 
 ## adding components 
@@ -63,3 +63,4 @@ use the accessible controls to show a list of layers when the user edits the lay
 when the user selects a layer the object should be added to the layer. 
 there must also be a tag text box in the inspector. 
 the user must enter the name of a tag to assign it to the object. 
+

@@ -1,25 +1,26 @@
-# unity access 
-Unity access is an editor plugin that aims to make the unity editor more accessible to people who need to use screen readers. 
-It uses the Unity Editor API as well as the NVDA API to connect the editor with the NVDA screen reader. 
-The project has been vibe coded using openai codex and the main language is c#. 
+# unity_access 
+Unity_access is a plugin for the unity editor that allows NVDA screen reader to access the previously inaccessible Unity editor. 
+the project functions as a bridge between NVDA screen reader and the unity editor, providing blind users with the tools to access the Unity Editor. 
+## how does unity_access work 
+Unity_access works by using the Unity Editor API to perform operations inside the editor. 
+These operations include:
+- reading serialised properties
+- performing actions such as moving or renaming an asset. 
+Unity_access is designed to turn the inaccessible information that the Unity Editor provides and present it in a screen reader compatable interface. 
+
 ## installing the plugin 
-to install the plugin follow these steps: 
-- clone the github repo into a folder 
-- from the cloned repo coppy the folder named editor (found in the Assets folder)
-you can also coppy the Editor.meta file but unity can create it's own. 
--paste the folder into the Assets directory of your unity project. 
-- open the unity editor and allow it to compile the new scripts. 
+to install the plugin follow these steps 
+1. clone the repo to your device 
+2. extract the editor folder and editor.meta file. 
+3. add it into your projects assets folder 
+4. reload unity 
+## common keyboard shortcuts 
+h: opens the hierarchy 
+ctrl+n opens the new scene menu 
+shift+F10 opens the options menu on folders, files and objects 
+alt+F opens the file menu 
+alt+u opens the unity_access menu 
 
-## useful shortcuts 
-ctr + 2 puts unity into the game view 
-h opens the accessible hierarchy 
-ctrl + p plays the seen 
-alt + f opens files 
-note: most of these shortcuts are unity defalt 
-## compatability 
-this plugin was designed for the unity editor v 6.3 lts. 
-support has not been tested on any other versions. 
-the plugin requires NVDA. you can download it through their [sight](https://www.nvaccess.org/download/)
 
-## devlogs and updates 
-you can find the latest devlogs on my devcommunity profile [here](https://dev.to/retro-coder64)
+## devlogs 
+the devlogs for this project are located on my dev community profile. You can check it out [here](https://dev.to/retro-coder64)

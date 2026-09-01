@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Reflection;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
@@ -15,6 +16,7 @@ namespace UnityAccess
     {
         private const string WindowTitle = "Accessible Inspector";
         private const string EditControlName = "AccessibleInspectorValue";
+        private const string ComponentSearchControlName = "AccessibleInspectorComponentSearch";
         private readonly List<InspectorItem> items = new List<InspectorItem>();
         private GameObject inspectedObject;
         private Vector2 scrollPosition;
@@ -24,7 +26,11 @@ namespace UnityAccess
         private bool isAddingComponent;
         private int selectedComponentTypeIndex;
         private Component inspectedComponent;
+        private readonly List<ComponentPropertyItem> allComponentProperties = new List<ComponentPropertyItem>();
         private readonly List<ComponentPropertyItem> componentProperties = new List<ComponentPropertyItem>();
+        private string componentSearchText = string.Empty;
+        private string appliedComponentSearchText = string.Empty;
+        private bool focusComponentSearch;
         private int selectedPropertyIndex;
         private bool isChoosingOption;
         private int selectedOptionIndex;
@@ -98,7 +104,7 @@ namespace UnityAccess
                 : isAddingComponent
                 ? "Choose a component with Up and Down. Enter adds it. Escape cancels."
                 : inspectedComponent != null
-                    ? "Up and Down navigate properties. Enter edits or activates. Escape returns to the inspector."
+                    ? "Type to search. Up and Down navigate properties. Enter edits or activates. Escape returns to the inspector."
                     : "Up and Down navigate. Enter edits or activates. Backspace removes a component. Escape returns to the hierarchy.");
             scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
             if (isChoosingLayer)
@@ -169,6 +175,29 @@ namespace UnityAccess
 
         private void DrawComponentProperties()
         {
+            bool searchEnabled = !textEdit.IsEditing && !isChoosingOption;
+            EditorGUI.BeginDisabledGroup(!searchEnabled);
+            string updatedSearchText = AccessibleControls.ToolbarSearch(
+                ComponentSearchControlName,
+                "Search properties",
+                componentSearchText,
+                focusComponentSearch && searchEnabled);
+            EditorGUI.EndDisabledGroup();
+            focusComponentSearch = false;
+            if (searchEnabled && !string.Equals(updatedSearchText, componentSearchText, StringComparison.Ordinal))
+            {
+                componentSearchText = updatedSearchText;
+                ApplyComponentPropertySearch(false, true);
+            }
+
+            if (componentProperties.Count == 0)
+            {
+                EditorGUILayout.LabelField(string.IsNullOrWhiteSpace(componentSearchText)
+                    ? "No editable properties."
+                    : "No matching properties.");
+                return;
+            }
+
             for (int index = 0; index < componentProperties.Count; index++)
             {
                 Rect row = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
@@ -386,6 +415,12 @@ namespace UnityAccess
                 return;
             }
 
+            if (TryHandleComponentSearchInput(currentEvent))
+            {
+                currentEvent.Use();
+                return;
+            }
+
             if (currentEvent.keyCode == KeyCode.UpArrow)
             {
                 MovePropertySelection(-1);
@@ -413,6 +448,37 @@ namespace UnityAccess
             }
 
             currentEvent.Use();
+        }
+
+        private bool TryHandleComponentSearchInput(Event currentEvent)
+        {
+            string updatedSearchText = componentSearchText;
+            if (currentEvent.keyCode == KeyCode.Backspace)
+            {
+                if (updatedSearchText.Length == 0)
+                {
+                    return true;
+                }
+
+                updatedSearchText = updatedSearchText.Substring(0, updatedSearchText.Length - 1);
+            }
+            else if ((currentEvent.control || currentEvent.command) && currentEvent.keyCode == KeyCode.V)
+            {
+                updatedSearchText += EditorGUIUtility.systemCopyBuffer ?? string.Empty;
+            }
+            else if (currentEvent.character != '\0' && !char.IsControl(currentEvent.character))
+            {
+                updatedSearchText += currentEvent.character;
+            }
+            else
+            {
+                return false;
+            }
+
+            componentSearchText = updatedSearchText;
+            focusComponentSearch = true;
+            ApplyComponentPropertySearch(false, true);
+            return true;
         }
 
         private void HandleComponentListInput(Event currentEvent)
@@ -711,14 +777,18 @@ namespace UnityAccess
             selectedPropertyIndex = 0;
             textEdit.End();
             isChoosingOption = false;
+            componentSearchText = string.Empty;
+            appliedComponentSearchText = string.Empty;
+            focusComponentSearch = true;
             RefreshComponentProperties();
             SpeakSafely(component.GetType().Name + " component. " + componentProperties.Count +
-                " properties. " + GetSelectedPropertyDescription() + ".");
+                " properties. Search properties, editable text box, empty. " + GetSelectedPropertyDescription() + ".");
             Repaint();
         }
 
         private void RefreshComponentProperties()
         {
+            allComponentProperties.Clear();
             componentProperties.Clear();
             if (inspectedComponent == null)
             {
@@ -729,18 +799,32 @@ namespace UnityAccess
             if (componentTransform != null)
             {
                 AddTransformComponentProperties(componentTransform);
-                selectedPropertyIndex = Mathf.Clamp(selectedPropertyIndex, 0, componentProperties.Count - 1);
+                HashSet<string> transformMemberNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    NormalizeMemberName("localPosition"),
+                    NormalizeMemberName("localEulerAngles"),
+                    NormalizeMemberName("localScale")
+                };
+                AddReflectedComponentProperties(transformMemberNames);
+                ApplyComponentPropertySearch(true, false);
                 return;
             }
 
             SerializedObject serializedObject = new SerializedObject(inspectedComponent);
             serializedObject.UpdateIfRequiredOrScript();
             SerializedProperty iterator = serializedObject.GetIterator();
+            HashSet<string> serializedMemberNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             bool enterChildren = true;
             // Traverse every serialized property, including values Unity hides from its
             // standard Inspector, so supported references such as sprites are not omitted.
             while (iterator.Next(enterChildren))
             {
+                // Public component properties correspond to root serialized members;
+                // nested names must not suppress an unrelated reflected property.
+                if (iterator.depth == 0)
+                {
+                    serializedMemberNames.Add(NormalizeMemberName(iterator.name));
+                }
                 // Descend through serialized containers so fields in nested serializable
                 // objects are detected. Supported values are leaves in this view.
                 enterChildren = !IsSupportedComponentProperty(iterator) && iterator.hasVisibleChildren;
@@ -751,24 +835,176 @@ namespace UnityAccess
                     continue;
                 }
 
-                if (iterator.propertyType == SerializedPropertyType.Vector2)
+                if (iterator.propertyType == SerializedPropertyType.Vector2 && iterator.editable)
                 {
-                    componentProperties.Add(ComponentPropertyItem.FromVectorProperty(iterator, 0));
-                    componentProperties.Add(ComponentPropertyItem.FromVectorProperty(iterator, 1));
+                    allComponentProperties.Add(ComponentPropertyItem.FromVectorProperty(iterator, 0));
+                    allComponentProperties.Add(ComponentPropertyItem.FromVectorProperty(iterator, 1));
                 }
-                else if (iterator.propertyType == SerializedPropertyType.Vector3)
+                else if (iterator.propertyType == SerializedPropertyType.Vector3 && iterator.editable)
                 {
-                    componentProperties.Add(ComponentPropertyItem.FromVectorProperty(iterator, 0));
-                    componentProperties.Add(ComponentPropertyItem.FromVectorProperty(iterator, 1));
-                    componentProperties.Add(ComponentPropertyItem.FromVectorProperty(iterator, 2));
+                    allComponentProperties.Add(ComponentPropertyItem.FromVectorProperty(iterator, 0));
+                    allComponentProperties.Add(ComponentPropertyItem.FromVectorProperty(iterator, 1));
+                    allComponentProperties.Add(ComponentPropertyItem.FromVectorProperty(iterator, 2));
                 }
-                else if (IsSupportedComponentProperty(iterator))
+                else if (iterator.propertyType == SerializedPropertyType.Color && iterator.editable)
                 {
-                    componentProperties.Add(ComponentPropertyItem.FromProperty(iterator));
+                    allComponentProperties.Add(ComponentPropertyItem.FromVectorProperty(iterator, 0));
+                    allComponentProperties.Add(ComponentPropertyItem.FromVectorProperty(iterator, 1));
+                    allComponentProperties.Add(ComponentPropertyItem.FromVectorProperty(iterator, 2));
+                    allComponentProperties.Add(ComponentPropertyItem.FromVectorProperty(iterator, 3));
+                }
+                else if (IsSupportedComponentProperty(iterator) && iterator.editable)
+                {
+                    allComponentProperties.Add(ComponentPropertyItem.FromProperty(iterator));
                 }
             }
 
-            selectedPropertyIndex = Mathf.Clamp(selectedPropertyIndex, 0, Math.Max(0, componentProperties.Count - 1));
+            AddReflectedComponentProperties(serializedMemberNames);
+            ApplyComponentPropertySearch(true, false);
+        }
+
+        private void AddReflectedComponentProperties(HashSet<string> existingMemberNames)
+        {
+            PropertyInfo[] publicProperties = inspectedComponent.GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public);
+            foreach (PropertyInfo property in publicProperties.OrderBy(value => value.Name, StringComparer.Ordinal))
+            {
+                if (!IsEditableReflectedProperty(property) ||
+                    existingMemberNames.Contains(NormalizeMemberName(property.Name)))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    object value = property.GetValue(inspectedComponent, null);
+                    if (property.PropertyType == typeof(Vector2))
+                    {
+                        allComponentProperties.Add(ComponentPropertyItem.FromReflectedProperty(property, value, 0));
+                        allComponentProperties.Add(ComponentPropertyItem.FromReflectedProperty(property, value, 1));
+                    }
+                    else if (property.PropertyType == typeof(Vector3))
+                    {
+                        allComponentProperties.Add(ComponentPropertyItem.FromReflectedProperty(property, value, 0));
+                        allComponentProperties.Add(ComponentPropertyItem.FromReflectedProperty(property, value, 1));
+                        allComponentProperties.Add(ComponentPropertyItem.FromReflectedProperty(property, value, 2));
+                    }
+                    else if (property.PropertyType == typeof(Color))
+                    {
+                        allComponentProperties.Add(ComponentPropertyItem.FromReflectedProperty(property, value, 0));
+                        allComponentProperties.Add(ComponentPropertyItem.FromReflectedProperty(property, value, 1));
+                        allComponentProperties.Add(ComponentPropertyItem.FromReflectedProperty(property, value, 2));
+                        allComponentProperties.Add(ComponentPropertyItem.FromReflectedProperty(property, value, 3));
+                    }
+                    else
+                    {
+                        allComponentProperties.Add(ComponentPropertyItem.FromReflectedProperty(property, value));
+                    }
+                }
+                catch (Exception exception)
+                {
+                    PluginErrorLog.Write(nameof(InspectorAccessibilityWindow), exception);
+                }
+            }
+        }
+
+        private static bool IsEditableReflectedProperty(PropertyInfo property)
+        {
+            MethodInfo getter = property.GetGetMethod(false);
+            MethodInfo setter = property.GetSetMethod(false);
+            Type propertyType = property.PropertyType;
+            bool supportedType = propertyType == typeof(bool) ||
+                propertyType == typeof(int) ||
+                propertyType == typeof(float) ||
+                propertyType == typeof(string) ||
+                propertyType == typeof(Vector2) ||
+                propertyType == typeof(Vector3) ||
+                propertyType == typeof(Color) ||
+                propertyType.IsEnum ||
+                typeof(UnityEngine.Object).IsAssignableFrom(propertyType);
+            return getter != null && setter != null &&
+                !getter.IsStatic && !setter.IsStatic &&
+                property.GetIndexParameters().Length == 0 && supportedType;
+        }
+
+        private static string NormalizeMemberName(string memberName)
+        {
+            string normalizedName = memberName.StartsWith("m_", StringComparison.Ordinal)
+                ? memberName.Substring(2)
+                : memberName;
+            return normalizedName.Replace("_", string.Empty);
+        }
+
+        private void ApplyComponentPropertySearch(bool force, bool announce)
+        {
+            if (!force && string.Equals(componentSearchText, appliedComponentSearchText, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            appliedComponentSearchText = componentSearchText;
+            componentProperties.Clear();
+            string query = componentSearchText.Trim();
+            if (query.Length == 0)
+            {
+                componentProperties.AddRange(allComponentProperties);
+            }
+            else
+            {
+                componentProperties.AddRange(allComponentProperties
+                    .Select((item, index) => new
+                    {
+                        Item = item,
+                        OriginalIndex = index,
+                        MatchScore = GetComponentPropertyMatchScore(item.Label, query)
+                    })
+                    .Where(match => match.MatchScore >= 0)
+                    .OrderBy(match => match.MatchScore)
+                    .ThenBy(match => match.OriginalIndex)
+                    .Select(match => match.Item));
+            }
+
+            selectedPropertyIndex = announce
+                ? 0
+                : Mathf.Clamp(selectedPropertyIndex, 0, Math.Max(0, componentProperties.Count - 1));
+            if (!announce)
+            {
+                return;
+            }
+
+            if (componentProperties.Count == 0)
+            {
+                SpeakSafely("Search properties, " + (query.Length == 0 ? "empty" : query) + ". No results.");
+            }
+            else
+            {
+                SpeakSafely("Search properties, " + (query.Length == 0 ? "empty" : query) + ". " +
+                    componentProperties.Count + (componentProperties.Count == 1 ? " result. " : " results. ") +
+                    GetSelectedPropertyDescription() + ".");
+            }
+
+            Repaint();
+        }
+
+        private static int GetComponentPropertyMatchScore(string label, string query)
+        {
+            if (string.Equals(label, query, StringComparison.OrdinalIgnoreCase))
+            {
+                return 0;
+            }
+
+            if (label.StartsWith(query, StringComparison.OrdinalIgnoreCase))
+            {
+                return 10;
+            }
+
+            int matchIndex = label.IndexOf(query, StringComparison.OrdinalIgnoreCase);
+            if (matchIndex < 0)
+            {
+                return -1;
+            }
+
+            bool beginsWord = matchIndex == 0 || !char.IsLetterOrDigit(label[matchIndex - 1]);
+            return (beginsWord ? 20 : 100) + matchIndex;
         }
 
         // component.md defines the serialized field types exposed by the accessible view.
@@ -780,6 +1016,7 @@ namespace UnityAccess
                 property.propertyType == SerializedPropertyType.String ||
                 property.propertyType == SerializedPropertyType.Vector2 ||
                 property.propertyType == SerializedPropertyType.Vector3 ||
+                property.propertyType == SerializedPropertyType.Color ||
                 property.propertyType == SerializedPropertyType.Enum ||
                 property.propertyType == SerializedPropertyType.ObjectReference;
         }
@@ -789,22 +1026,24 @@ namespace UnityAccess
             Vector3 position = componentTransform.localPosition;
             Vector3 rotation = componentTransform.localEulerAngles;
             Vector3 scale = componentTransform.localScale;
-            componentProperties.Add(ComponentPropertyItem.FromTransformAxis("X position", "position", 0, position.x));
-            componentProperties.Add(ComponentPropertyItem.FromTransformAxis("Y position", "position", 1, position.y));
-            componentProperties.Add(ComponentPropertyItem.FromTransformAxis("Z position", "position", 2, position.z));
-            componentProperties.Add(ComponentPropertyItem.FromTransformAxis("X rotation", "rotation", 0, rotation.x));
-            componentProperties.Add(ComponentPropertyItem.FromTransformAxis("Y rotation", "rotation", 1, rotation.y));
-            componentProperties.Add(ComponentPropertyItem.FromTransformAxis("Z rotation", "rotation", 2, rotation.z));
-            componentProperties.Add(ComponentPropertyItem.FromTransformAxis("X scale", "scale", 0, scale.x));
-            componentProperties.Add(ComponentPropertyItem.FromTransformAxis("Y scale", "scale", 1, scale.y));
-            componentProperties.Add(ComponentPropertyItem.FromTransformAxis("Z scale", "scale", 2, scale.z));
+            allComponentProperties.Add(ComponentPropertyItem.FromTransformAxis("X position", "position", 0, position.x));
+            allComponentProperties.Add(ComponentPropertyItem.FromTransformAxis("Y position", "position", 1, position.y));
+            allComponentProperties.Add(ComponentPropertyItem.FromTransformAxis("Z position", "position", 2, position.z));
+            allComponentProperties.Add(ComponentPropertyItem.FromTransformAxis("X rotation", "rotation", 0, rotation.x));
+            allComponentProperties.Add(ComponentPropertyItem.FromTransformAxis("Y rotation", "rotation", 1, rotation.y));
+            allComponentProperties.Add(ComponentPropertyItem.FromTransformAxis("Z rotation", "rotation", 2, rotation.z));
+            allComponentProperties.Add(ComponentPropertyItem.FromTransformAxis("X scale", "scale", 0, scale.x));
+            allComponentProperties.Add(ComponentPropertyItem.FromTransformAxis("Y scale", "scale", 1, scale.y));
+            allComponentProperties.Add(ComponentPropertyItem.FromTransformAxis("Z scale", "scale", 2, scale.z));
         }
 
         private void MovePropertySelection(int direction)
         {
             if (componentProperties.Count == 0)
             {
-                SpeakSafely("This component has no visible serialized properties.");
+                SpeakSafely(string.IsNullOrWhiteSpace(componentSearchText)
+                    ? "This component has no editable properties."
+                    : "No search results.");
                 return;
             }
 
@@ -818,7 +1057,9 @@ namespace UnityAccess
         {
             if (componentProperties.Count == 0)
             {
-                SpeakSafely("This component has no visible serialized properties.");
+                SpeakSafely(string.IsNullOrWhiteSpace(componentSearchText)
+                    ? "This component has no editable properties."
+                    : "No search results.");
                 return;
             }
 
@@ -842,7 +1083,8 @@ namespace UnityAccess
             if ((item.PropertyType == SerializedPropertyType.Integer ||
                 item.PropertyType == SerializedPropertyType.Float ||
                 item.PropertyType == SerializedPropertyType.Vector2 ||
-                item.PropertyType == SerializedPropertyType.Vector3) && item.IsEditable)
+                item.PropertyType == SerializedPropertyType.Vector3 ||
+                item.PropertyType == SerializedPropertyType.Color) && item.IsEditable)
             {
                 textEdit.Begin(item.Value);
                 SpeakSafely("Editing " + item.Label + ". Current value " + item.Value +
@@ -877,6 +1119,12 @@ namespace UnityAccess
                 return;
             }
 
+            if (item.IsReflectedProperty)
+            {
+                CommitReflectedPropertyEdit(item);
+                return;
+            }
+
             SerializedObject serializedObject = new SerializedObject(inspectedComponent);
             SerializedProperty property = serializedObject.FindProperty(item.PropertyPath);
             if (property == null)
@@ -908,11 +1156,17 @@ namespace UnityAccess
                     value[item.VectorAxis] = axisValue;
                     property.vector2Value = value;
                 }
-                else
+                else if (property.propertyType == SerializedPropertyType.Vector3)
                 {
                     Vector3 value = property.vector3Value;
                     value[item.VectorAxis] = axisValue;
                     property.vector3Value = value;
+                }
+                else
+                {
+                    Color value = property.colorValue;
+                    value[item.VectorAxis] = axisValue;
+                    property.colorValue = value;
                 }
             }
             else if (property.propertyType == SerializedPropertyType.Integer)
@@ -946,6 +1200,17 @@ namespace UnityAccess
 
         private void OpenObjectReferenceSelector(ComponentPropertyItem item)
         {
+            if (item.IsReflectedProperty)
+            {
+                UnityEngine.Object reflectedValue = item.ReflectedProperty.GetValue(inspectedComponent, null) as UnityEngine.Object;
+                ObjectSelector.Open(
+                    item.ReflectedProperty.PropertyType,
+                    inspectedComponent,
+                    reflectedValue,
+                    selectedObject => ApplyReflectedPropertyValue(item.ReflectedProperty, item.Label, selectedObject));
+                return;
+            }
+
             SerializedObject serializedObject = new SerializedObject(inspectedComponent);
             SerializedProperty property = serializedObject.FindProperty(item.PropertyPath);
             if (property == null)
@@ -1004,6 +1269,87 @@ namespace UnityAccess
             ApplyComponentPropertyChange(serializedObject, label);
         }
 
+        private void CommitReflectedPropertyEdit(ComponentPropertyItem item)
+        {
+            Type propertyType = item.ReflectedProperty.PropertyType;
+            object value;
+            if (propertyType == typeof(string))
+            {
+                value = textEdit.Value;
+            }
+            else if (propertyType == typeof(int))
+            {
+                int integerValue;
+                if (!int.TryParse(textEdit.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out integerValue))
+                {
+                    SpeakSafely("Invalid whole number.");
+                    return;
+                }
+
+                value = integerValue;
+            }
+            else
+            {
+                float floatValue;
+                if (!float.TryParse(textEdit.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out floatValue) ||
+                    float.IsNaN(floatValue) || float.IsInfinity(floatValue))
+                {
+                    SpeakSafely("Invalid number. Use digits, a minus sign, and a decimal point.");
+                    return;
+                }
+
+                if (item.VectorAxis >= 0)
+                {
+                    object currentValue = item.ReflectedProperty.GetValue(inspectedComponent, null);
+                    if (propertyType == typeof(Vector2))
+                    {
+                        Vector2 vector = (Vector2)currentValue;
+                        vector[item.VectorAxis] = floatValue;
+                        value = vector;
+                    }
+                    else if (propertyType == typeof(Vector3))
+                    {
+                        Vector3 vector = (Vector3)currentValue;
+                        vector[item.VectorAxis] = floatValue;
+                        value = vector;
+                    }
+                    else
+                    {
+                        Color color = (Color)currentValue;
+                        color[item.VectorAxis] = floatValue;
+                        value = color;
+                    }
+                }
+                else
+                {
+                    value = floatValue;
+                }
+            }
+
+            ApplyReflectedPropertyValue(item.ReflectedProperty, item.Label, value);
+        }
+
+        private void ApplyReflectedPropertyValue(PropertyInfo property, string label, object value)
+        {
+            try
+            {
+                Undo.RecordObject(inspectedComponent, "Unity Access edit " + label);
+                property.SetValue(inspectedComponent, value, null);
+                EditorUtility.SetDirty(inspectedComponent);
+                PrefabUtility.RecordPrefabInstancePropertyModifications(inspectedComponent);
+                textEdit.End();
+                isChoosingOption = false;
+                RefreshComponentProperties();
+                SpeakSafely(label + " changed to " + componentProperties[selectedPropertyIndex].Value + ".");
+                Repaint();
+            }
+            catch (Exception exception)
+            {
+                PluginErrorLog.Write(nameof(InspectorAccessibilityWindow), exception);
+                SpeakSafely("Unity could not change " + label + ". See debug.txt for details.");
+            }
+        }
+
         private void CommitTransformComponentEdit(ComponentPropertyItem item)
         {
             float parsedValue;
@@ -1045,6 +1391,13 @@ namespace UnityAccess
 
         private void ToggleBooleanProperty(ComponentPropertyItem item)
         {
+            if (item.IsReflectedProperty)
+            {
+                bool currentValue = (bool)item.ReflectedProperty.GetValue(inspectedComponent, null);
+                ApplyReflectedPropertyValue(item.ReflectedProperty, item.Label, !currentValue);
+                return;
+            }
+
             SerializedObject serializedObject = new SerializedObject(inspectedComponent);
             SerializedProperty property = serializedObject.FindProperty(item.PropertyPath);
             if (property == null)
@@ -1071,6 +1424,13 @@ namespace UnityAccess
         private void CommitOption()
         {
             ComponentPropertyItem item = componentProperties[selectedPropertyIndex];
+            if (item.IsReflectedProperty)
+            {
+                object value = Enum.Parse(item.ReflectedProperty.PropertyType, item.Options[selectedOptionIndex]);
+                ApplyReflectedPropertyValue(item.ReflectedProperty, item.Label, value);
+                return;
+            }
+
             SerializedObject serializedObject = new SerializedObject(inspectedComponent);
             SerializedProperty property = serializedObject.FindProperty(item.PropertyPath);
             if (property == null)
@@ -1109,7 +1469,7 @@ namespace UnityAccess
         {
             if (componentProperties.Count == 0)
             {
-                return "No visible serialized properties";
+                return "No editable properties";
             }
 
             ComponentPropertyItem item = componentProperties[selectedPropertyIndex];
@@ -1284,7 +1644,8 @@ namespace UnityAccess
                 int optionIndex,
                 string transformGroup,
                 int transformAxis,
-                int vectorAxis = -1)
+                int vectorAxis = -1,
+                PropertyInfo reflectedProperty = null)
             {
                 Label = label;
                 Value = value;
@@ -1296,6 +1657,7 @@ namespace UnityAccess
                 TransformGroup = transformGroup;
                 TransformAxis = transformAxis;
                 VectorAxis = vectorAxis;
+                ReflectedProperty = reflectedProperty;
             }
 
             internal string Label { get; private set; }
@@ -1317,6 +1679,13 @@ namespace UnityAccess
             internal int TransformAxis { get; private set; }
 
             internal int VectorAxis { get; private set; }
+
+            internal PropertyInfo ReflectedProperty { get; private set; }
+
+            internal bool IsReflectedProperty
+            {
+                get { return ReflectedProperty != null; }
+            }
 
             internal bool IsTransformAxis
             {
@@ -1367,10 +1736,14 @@ namespace UnityAccess
 
             internal static ComponentPropertyItem FromVectorProperty(SerializedProperty property, int axis)
             {
-                string axisName = axis == 0 ? "X" : axis == 1 ? "Y" : "Z";
+                string axisName = property.propertyType == SerializedPropertyType.Color
+                    ? axis == 0 ? "Red" : axis == 1 ? "Green" : axis == 2 ? "Blue" : "Alpha"
+                    : axis == 0 ? "X" : axis == 1 ? "Y" : "Z";
                 float value = property.propertyType == SerializedPropertyType.Vector2
                     ? property.vector2Value[axis]
-                    : property.vector3Value[axis];
+                    : property.propertyType == SerializedPropertyType.Vector3
+                        ? property.vector3Value[axis]
+                        : property.colorValue[axis];
                 return new ComponentPropertyItem(
                     property.displayName + " " + axisName,
                     FormatFloat(value),
@@ -1382,6 +1755,103 @@ namespace UnityAccess
                     string.Empty,
                     -1,
                     axis);
+            }
+
+            internal static ComponentPropertyItem FromReflectedProperty(PropertyInfo property, object value, int vectorAxis = -1)
+            {
+                Type propertyType = property.PropertyType;
+                SerializedPropertyType displayedType = GetDisplayedPropertyType(propertyType);
+                string label = ObjectNames.NicifyVariableName(property.Name);
+                string[] options = propertyType.IsEnum ? Enum.GetNames(propertyType) : Array.Empty<string>();
+                int optionIndex = propertyType.IsEnum ? Array.IndexOf(options, value.ToString()) : -1;
+                string displayedValue;
+                if (vectorAxis >= 0)
+                {
+                    label += propertyType == typeof(Color)
+                        ? vectorAxis == 0 ? " Red" : vectorAxis == 1 ? " Green" : vectorAxis == 2 ? " Blue" : " Alpha"
+                        : vectorAxis == 0 ? " X" : vectorAxis == 1 ? " Y" : " Z";
+                    float axisValue = propertyType == typeof(Vector2)
+                        ? ((Vector2)value)[vectorAxis]
+                        : propertyType == typeof(Vector3)
+                            ? ((Vector3)value)[vectorAxis]
+                            : ((Color)value)[vectorAxis];
+                    displayedValue = FormatFloat(axisValue);
+                }
+                else if (propertyType == typeof(bool))
+                {
+                    displayedValue = (bool)value ? "On" : "Off";
+                }
+                else if (typeof(UnityEngine.Object).IsAssignableFrom(propertyType))
+                {
+                    UnityEngine.Object objectValue = value as UnityEngine.Object;
+                    displayedValue = objectValue == null ? "None" : objectValue.name;
+                }
+                else if (propertyType == typeof(float))
+                {
+                    displayedValue = FormatFloat((float)value);
+                }
+                else
+                {
+                    displayedValue = Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+                }
+
+                return new ComponentPropertyItem(
+                    label,
+                    displayedValue,
+                    string.Empty,
+                    displayedType,
+                    true,
+                    options,
+                    optionIndex,
+                    string.Empty,
+                    -1,
+                    vectorAxis,
+                    property);
+            }
+
+            private static SerializedPropertyType GetDisplayedPropertyType(Type propertyType)
+            {
+                if (propertyType == typeof(bool))
+                {
+                    return SerializedPropertyType.Boolean;
+                }
+
+                if (propertyType == typeof(int))
+                {
+                    return SerializedPropertyType.Integer;
+                }
+
+                if (propertyType == typeof(float))
+                {
+                    return SerializedPropertyType.Float;
+                }
+
+                if (propertyType == typeof(string))
+                {
+                    return SerializedPropertyType.String;
+                }
+
+                if (propertyType == typeof(Vector2))
+                {
+                    return SerializedPropertyType.Vector2;
+                }
+
+                if (propertyType == typeof(Vector3))
+                {
+                    return SerializedPropertyType.Vector3;
+                }
+
+                if (propertyType == typeof(Color))
+                {
+                    return SerializedPropertyType.Color;
+                }
+
+                if (propertyType.IsEnum)
+                {
+                    return SerializedPropertyType.Enum;
+                }
+
+                return SerializedPropertyType.ObjectReference;
             }
 
             private static string GetPropertyValue(SerializedProperty property)

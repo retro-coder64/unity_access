@@ -32,3 +32,23 @@ InspectorAccessibilityWindow.cs
 Restored the visible-child filter while retaining all-property traversal, preventing descent into hidden internal containers without excluding supported non-visible component properties.
 744
 746
+
+InspectorAccessibilityWindow.cs
+Added an accessible component-property search field that filters and ranks label matches while typing, announces result counts or no results through NVDA, supports arrow-key result navigation, and disables searching while a property value or enum is being edited.
+18
+905
+
+InspectorAccessibilityWindow.cs
+Made component search consume printable keys, Backspace, and paste directly from the component view so searching works even when Unity does not retain toolbar-search keyboard focus.
+417
+488
+
+InspectorAccessibilityWindow.cs
+Restored the component.md public C# property pass after serialized-property discovery, filtered both sources to editable supported values, and connected reflected bool, int, float, string, enum, Vector2, Vector3, and object-reference properties to accessible editing, Undo, prefab recording, and error reporting.
+5
+1810
+
+InspectorAccessibilityWindow.cs
+Added accessible Color support for serialized and reflected component properties by exposing searchable Red, Green, Blue, and Alpha numeric fields through the existing editing, Undo, and NVDA flows.
+849
+1847
