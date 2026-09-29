@@ -30,3 +30,7 @@ AccessibleAssetsViewer.cs
 Changed asset type reporting to identify PNGs imported as sprites from their TextureImporter mode, so the viewer and NVDA announce Sprite instead of Texture2D after conversion.
 58
 60
+AccessibleAssetsViewer.cs
+Added a model-only Configure Rig submenu with accessible Generic and Humanoid choices. The selected rig is applied with ModelImporter, Humanoid creates its Avatar from the current model, Unity saves and reimports the asset, NVDA announces navigation and results, and failures are sent to PluginErrorLog.
+21
+626

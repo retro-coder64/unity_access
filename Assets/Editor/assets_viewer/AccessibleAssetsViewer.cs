@@ -18,6 +18,8 @@ namespace UnityAccess
 
         private static readonly string[] StandardMenuOptions = { "Rename", "Delete", "Move" };
         private static readonly string[] ImageMenuOptions = { "Rename", "Delete", "Move", "Convert to texture", "Convert to sprite" };
+        private static readonly string[] ModelMenuOptions = { "Rename", "Delete", "Move", "Configure Rig" };
+        private static readonly string[] RigMenuOptions = { "Generic", "Humanoid" };
 
         private readonly List<AssetEntry> folders = new List<AssetEntry>();
         private readonly List<AssetEntry> files = new List<AssetEntry>();
@@ -32,6 +34,7 @@ namespace UnityAccess
         private AssetEntry editTarget;
         private AssetEntry menuTarget;
         private int menuIndex;
+        private MenuPage menuPage = MenuPage.Options;
         private bool isSearchSelected = true;
         private bool focusSearch;
         private bool focusRename;
@@ -40,6 +43,12 @@ namespace UnityAccess
         {
             Folders,
             Files
+        }
+
+        private enum MenuPage
+        {
+            Options,
+            ConfigureRig
         }
 
         private sealed class AssetEntry
@@ -198,10 +207,13 @@ namespace UnityAccess
                 return;
             }
 
-            string[] options = GetMenuOptions(menuTarget);
+            string[] options = GetActiveMenuOptions();
             EditorGUILayout.Space(6.0f);
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.LabelField("Options for " + menuTarget.Name, EditorStyles.boldLabel);
+            string heading = menuPage == MenuPage.ConfigureRig
+                ? "Configure Rig for " + menuTarget.Name
+                : "Options for " + menuTarget.Name;
+            EditorGUILayout.LabelField(heading, EditorStyles.boldLabel);
             for (int index = 0; index < options.Length; index++)
             {
                 if (AccessibleControls.Button(options[index], index == menuIndex))
@@ -350,7 +362,7 @@ namespace UnityAccess
 
         private void HandleMenuKeyboard(Event currentEvent)
         {
-            string[] options = GetMenuOptions(menuTarget);
+            string[] options = GetActiveMenuOptions();
             int direction;
             if (AccessibleKeyboard.TryGetVerticalDirection(currentEvent, out direction))
             {
@@ -366,8 +378,19 @@ namespace UnityAccess
             }
             else if (AccessibleKeyboard.IsCancel(currentEvent))
             {
-                menuTarget = null;
-                AccessibleSpeech.Speak("Options closed", SourceFile);
+                if (menuPage == MenuPage.ConfigureRig)
+                {
+                    menuPage = MenuPage.Options;
+                    menuIndex = 0;
+                    string[] parentOptions = GetMenuOptions(menuTarget);
+                    AccessibleSpeech.Speak("Options for " + menuTarget.Name + ". " + parentOptions[0] + ", 1 of " + parentOptions.Length, SourceFile);
+                }
+                else
+                {
+                    menuTarget = null;
+                    AccessibleSpeech.Speak("Options closed", SourceFile);
+                }
+
                 currentEvent.Use();
                 Repaint();
             }
@@ -485,13 +508,14 @@ namespace UnityAccess
         private void OpenOptions(AssetEntry target)
         {
             menuTarget = target;
+            menuPage = MenuPage.Options;
             menuIndex = 0;
             string[] options = GetMenuOptions(target);
             AccessibleSpeech.Speak("Options for " + target.Name + ". " + options[0] + ", 1 of " + options.Length, SourceFile);
             Repaint();
         }
 
-        /// <summary>Includes texture conversion actions only for assets handled by Unity's texture importer.</summary>
+        /// <summary>Includes importer-specific actions for supported images and models.</summary>
         private static string[] GetMenuOptions(AssetEntry target)
         {
             if (target != null && !target.IsFolder && AssetImporter.GetAtPath(target.Path) is TextureImporter)
@@ -499,37 +523,105 @@ namespace UnityAccess
                 return ImageMenuOptions;
             }
 
+            if (target != null && !target.IsFolder && AssetImporter.GetAtPath(target.Path) is ModelImporter)
+            {
+                return ModelMenuOptions;
+            }
+
             return StandardMenuOptions;
+        }
+
+        private string[] GetActiveMenuOptions()
+        {
+            return menuPage == MenuPage.ConfigureRig ? RigMenuOptions : GetMenuOptions(menuTarget);
         }
 
         private void RunMenuOption()
         {
             AssetEntry target = menuTarget;
-            menuTarget = null;
             if (target == null)
             {
                 return;
             }
 
+            if (menuPage == MenuPage.ConfigureRig)
+            {
+                menuTarget = null;
+                ConfigureModelRig(target, menuIndex == 0 ? ModelImporterAnimationType.Generic : ModelImporterAnimationType.Human);
+                return;
+            }
+
             if (menuIndex == 0)
             {
+                menuTarget = null;
                 BeginRename(target);
             }
             else if (menuIndex == 1)
             {
+                menuTarget = null;
                 Delete(target);
             }
             else if (menuIndex == 2)
             {
+                menuTarget = null;
                 Move(target);
+            }
+            else if (AssetImporter.GetAtPath(target.Path) is ModelImporter && menuIndex == 3)
+            {
+                menuPage = MenuPage.ConfigureRig;
+                menuIndex = 0;
+                AccessibleSpeech.Speak("Configure Rig. Generic, 1 of " + RigMenuOptions.Length, SourceFile);
+                Repaint();
             }
             else if (menuIndex == 3)
             {
+                menuTarget = null;
                 ConvertImage(target, TextureImporterType.Default, "texture");
             }
             else if (menuIndex == 4)
             {
+                menuTarget = null;
                 ConvertImage(target, TextureImporterType.Sprite, "sprite");
+            }
+        }
+
+        /// <summary>Applies the selected model rig through Unity's importer and reimports the model.</summary>
+        private void ConfigureModelRig(AssetEntry target, ModelImporterAnimationType animationType)
+        {
+            ModelImporter modelImporter = AssetImporter.GetAtPath(target.Path) as ModelImporter;
+            if (modelImporter == null)
+            {
+                InvalidOperationException exception = new InvalidOperationException("No ModelImporter was found for " + target.Path);
+                PluginErrorLog.Write(SourceFile, exception);
+                AccessibleSpeech.Speak("Rig configuration failed. The selected asset is not a supported model.", SourceFile);
+                return;
+            }
+
+            try
+            {
+                modelImporter.animationType = animationType;
+                if (animationType == ModelImporterAnimationType.Human)
+                {
+                    modelImporter.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
+                }
+
+                modelImporter.SaveAndReimport();
+
+                ModelImporter refreshedImporter = AssetImporter.GetAtPath(target.Path) as ModelImporter;
+                if (refreshedImporter == null || refreshedImporter.animationType != animationType)
+                {
+                    throw new InvalidOperationException("Unity did not apply the requested rig type to " + target.Path);
+                }
+
+                AssetDatabase.SaveAssets();
+                RefreshEntries();
+                string rigName = animationType == ModelImporterAnimationType.Human ? "Humanoid" : "Generic";
+                AccessibleSpeech.Speak(target.Name + " rig configured as " + rigName, SourceFile);
+            }
+            catch (Exception exception)
+            {
+                PluginErrorLog.Write(SourceFile, exception);
+                AccessibleSpeech.Speak("Rig configuration failed. See Editor debug log.", SourceFile);
             }
         }
 
