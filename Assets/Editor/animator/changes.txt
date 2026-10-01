@@ -1,0 +1,39 @@
+AnimatorAccessibilityWindow.cs
+Added the Unity Access/Animator menu command, accessible create/open workflow, live animation list, searchable .anim picker, add/remove/save actions, keyboard navigation, NVDA announcements, and error logging.
+line 1
+line 415
+
+changes.txt
+Recorded the animator implementation.
+line 1
+line 9
+
+AnimatorAccessibilityWindow.cs
+Expanded animation search to include AnimationClip sub-assets in imported models by loading all assets at each eligible path, and retained the selected clip object when adding it.
+line 122
+line 428
+
+changes.txt
+Recorded the imported-model animation support.
+line 11
+line 19
+
+AnimatorAccessibilityWindow.cs
+Added accessible layer listing, selection, named layer creation, and selected-layer animation actions with keyboard and NVDA feedback.
+line 16
+line 542
+
+changes.txt
+Recorded the add-layer functionality.
+line 21
+line 29
+
+AnimatorAccessibilityWindow.cs
+Added Backspace removal for the highlighted animator layer, protected the last layer, and updated focus and NVDA guidance after removal.
+line 104
+line 548
+
+changes.txt
+Recorded the layer removal functionality.
+line 31
+line 39
