@@ -9,11 +9,7 @@ These operations include:
 Unity_access is designed to turn the inaccessible information that the Unity Editor provides and present it in a screen reader compatable interface. 
 
 ## installing the plugin 
-to install the plugin follow these steps 
-1. clone the repo to your device 
-2. extract the editor folder and editor.meta file. 
-3. add it into your projects assets folder 
-4. reload unity 
+to install the plugin follow the steps in the [wiki](https://github.com/retro-coder64/unity_access/wiki/installing-unity_access)    
 ## common keyboard shortcuts 
 h: opens the hierarchy 
 ctrl+n opens the new scene menu 
