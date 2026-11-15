@@ -1,3 +1,5 @@
+
+
 # unity_access 
 Unity_access is a plugin for the unity editor that allows NVDA screen reader to access the previously inaccessible Unity editor. 
 the project functions as a bridge between NVDA screen reader and the unity editor, providing blind users with the tools to access the Unity Editor. 
@@ -20,3 +22,21 @@ alt+u opens the unity_access menu
 
 ## devlogs 
 the devlogs for this project are located on my dev community profile. You can check it out [here](https://dev.to/retro-coder64)
+Copyright (C) 2026 Daniel Longmore / retro-coder64
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+The developer of this software is not responsible or legally liable
+for how users choose to use it, or for any actions taken by users of
+the software.  
